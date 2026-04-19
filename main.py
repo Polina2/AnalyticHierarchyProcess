@@ -1,14 +1,13 @@
 import sys
-from LLMController import LLMWorker
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
-                             QScrollArea, QGroupBox, QMessageBox, QFileDialog, QProgressBar, QComboBox)
+                             QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox)
 from PyQt6.QtCore import Qt
 from AHP import AHP
 from LLMWorkerClient import LLMWorkerClient
 from Presenter import Presenter
-from PromptGenerator import PromptGenerator
+from ShortPromptGenerator import ShortPromptGenerator
 
 
 class AHPApplication(QMainWindow):
@@ -40,10 +39,8 @@ class AHPApplication(QMainWindow):
 
         # Вкладка ввода основных параметров
         self.setup_basic_input_tab()
-
         # Вкладка ввода данных экспертов
         self.setup_expert_input_tab()
-
         # Вкладка результатов
         self.setup_results_tab()
 
@@ -66,25 +63,18 @@ class AHPApplication(QMainWindow):
         self.model_path_edit.addItem("E:/models/openhermes-mistral")
         model_layout.addWidget(self.model_path_edit)
 
-        model_layout.addWidget(QLabel("Статус модели:"))
-        self.model_status_label = QLabel("Не загружена")
-        model_layout.addWidget(self.model_status_label)
-
         layout.addWidget(model_group)
 
         # Промпты
         prompt_group = QGroupBox("Промпты")
-        prompt_layout = QVBoxLayout(prompt_group)
+        self.prompt_layout = QVBoxLayout(prompt_group)
 
-        prompt_layout.addWidget(QLabel("Базовый промпт:"))
-        self.criteria_prompt = QTextEdit()
-        self.criteria_prompt.setMaximumHeight(100)
-        prompt_layout.addWidget(self.criteria_prompt)
+        self.prompt_layout.addWidget(QLabel("Базовый промпт:"))
+        self.base_prompt = QTextEdit()
+        self.base_prompt.setMaximumHeight(100)
+        self.prompt_layout.addWidget(self.base_prompt)
 
-        prompt_layout.addWidget(QLabel("Описание альтернатив:"))
-        self.alternative_prompt = QTextEdit()
-        self.alternative_prompt.setMaximumHeight(100)
-        prompt_layout.addWidget(self.alternative_prompt)
+        self.prompt_layout.addWidget(QLabel("Описание альтернатив:"))
 
         layout.addWidget(prompt_group)
 
@@ -97,11 +87,6 @@ class AHPApplication(QMainWindow):
         btn_layout.addWidget(self.generate_btn)
 
         layout.addLayout(btn_layout)
-
-        # Прогресс
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
 
         layout.addStretch()
 
@@ -259,11 +244,20 @@ class AHPApplication(QMainWindow):
                 self.data['num_alternatives'] > 0):
             self.generate_btn.setEnabled(True)
 
-        self.prompt_generator = PromptGenerator(self.data['criteria_names'], self.data['alternative_names'])
-        self.criteria_prompt.setPlainText(self.prompt_generator.get_basic_prompt())
-        # self.alternative_prompt.setPlainText(self.prompt_generator.get_english_basic_alternative_prompt())
+        for i in range(self.alternatives_names_layout.count()):
+            layout = QHBoxLayout()
+            layout.addWidget(QLabel(self.data['alternative_names'][i]))
+            text_edit = QTextEdit()
+            layout.addWidget(text_edit)
+            self.prompt_layout.addLayout(layout)
 
-        # QMessageBox.information(self, "Успех", "Параметры сохранены! Перейдите на вкладку 'Данные экспертов'")
+        # self.prompt_generator = PromptGenerator(self.data['criteria_names'], self.data['alternative_names'])
+        self.prompt_generator = ShortPromptGenerator()
+        self.base_prompt.setPlainText(self.prompt_generator.basic_prompt)
+        self.base_prompt.textChanged.connect(self.on_basic_prompt_changed)
+
+    def on_basic_prompt_changed(self):
+        self.prompt_generator.basic_prompt = self.base_prompt.toPlainText()
 
     def setup_expert_data_input(self):
         # Очищаем текущий контент
@@ -409,41 +403,43 @@ class AHPApplication(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка при экспорте в Excel: {str(e)}")
 
+    def _collect_alternative_descriptions(self):
+        self.alternative_descriptions = []
+        for i in range(3, self.prompt_layout.count()):
+            layout = self.prompt_layout.itemAt(i)
+            if layout:
+                text_edit = layout.itemAt(1).widget()
+                desc = text_edit.toPlainText().strip()
+                if not desc:
+                    desc = self.data['alternative_names'][i-1]
+                self.alternative_descriptions.append(desc)
+
     def get_llm_scores(self):
         """Получение оценок от LLM"""
         if not self.data['criteria_names'] or not self.data['alternative_names']:
             QMessageBox.warning(self, "Ошибка", "Сначала введите названия критериев и альтернатив")
             return
 
-        # Показываем прогресс
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
         self.generate_btn.setEnabled(False)
+        print('collect descriptions')
+        self._collect_alternative_descriptions()
 
         # Запускаем worker в отдельном потоке
         print("start creating worker")
-        # self.llm_worker = LLMWorker(
-        #     model_path=self.model_path_edit.text(),
-        #     prompt_generator=self.prompt_generator,
-        #     basic_prompt=self.criteria_prompt.toPlainText()
-        # )
         self.llm_worker = LLMWorkerClient(
             model_path=self.model_path_edit.currentText(),
             prompt_generator=self.prompt_generator,
-            basic_prompt=self.criteria_prompt.toPlainText(),
-            alt_description=self.alternative_prompt.toPlainText()
+            criteria_names=self.data['criteria_names'],
+            alternative_names=self.data['alternative_names'],
+            alternative_descriptions=self.alternative_descriptions
         )
 
-        print("connect signals")
         self.llm_worker.finished.connect(self.on_llm_finished)
         self.llm_worker.error.connect(self.on_llm_error)
-        print("start thread")
         self.llm_worker.start()
 
     def on_llm_finished(self, results):
         """Обработка завершения работы LLM"""
-        self.progress_bar.setValue(100)
-
         # Заполняем матрицы в UI
         print("start filling ui with results")
         self.fill_matrices_with_llm_results(results)
@@ -455,12 +451,10 @@ class AHPApplication(QMainWindow):
         QMessageBox.information(self, "Успех", "Оценки от LLM получены и заполнены!")
 
         # Возвращаем UI в исходное состояние
-        self.progress_bar.setVisible(False)
         self.generate_btn.setEnabled(True)
 
     def on_llm_error(self, error_message):
         """Обработка ошибки LLM"""
-        self.progress_bar.setVisible(False)
         self.generate_btn.setEnabled(True)
         QMessageBox.critical(self, "Ошибка LLM", f"Не удалось получить оценки:\n{error_message}")
 

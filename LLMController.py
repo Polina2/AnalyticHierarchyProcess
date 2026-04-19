@@ -1,8 +1,8 @@
+from PyQt6.QtCore import QThread, pyqtSignal
 import json
 import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging, BitsAndBytesConfig
-from PyQt6.QtCore import QThread, pyqtSignal
 
 
 def _replace_fractions(s):

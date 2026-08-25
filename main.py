@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from AHP import AHP
 from LLMWorkerClient import LLMWorkerClient
 from Presenter import Presenter
-from ShortPromptGenerator import ShortPromptGenerator
+from LingScalePromptGenerator import LingScalePromptGenerator
 
 
 class AHPApplication(QMainWindow):
@@ -39,6 +39,7 @@ class AHPApplication(QMainWindow):
 
         # Вкладка ввода основных параметров
         self.setup_basic_input_tab()
+        # self.__fill_input()
         # Вкладка ввода данных экспертов
         self.setup_expert_input_tab()
         # Вкладка результатов
@@ -54,13 +55,14 @@ class AHPApplication(QMainWindow):
         model_layout = QVBoxLayout(model_group)
 
         model_layout.addWidget(QLabel("Модель LLM:"))
-        # self.model_path_edit = QLineEdit("./models/qwen2.5-1.5b")
         self.model_path_edit = QComboBox()
+        self.model_path_edit.addItem("./models/qwen2.5")
+        self.model_path_edit.addItem("./models/qwen2.5-1.5b")
         self.model_path_edit.addItem("Qwen/Qwen2.5-7B-Instruct")
         self.model_path_edit.addItem("Qwen/Qwen2.5-32B-Instruct:featherless-ai")
-        self.model_path_edit.addItem("./models/qwen2.5-1.5b")
-        self.model_path_edit.addItem("E:/models/qwen2.5-3b")
-        self.model_path_edit.addItem("E:/models/openhermes-mistral")
+        self.model_path_edit.addItem("Qwen/Qwen3.6-35B-A3B:featherless-ai")
+        self.model_path_edit.addItem("Qwen/Qwen3-235B-A22B-Instruct-2507:scaleway")
+        # self.model_path_edit.addItem("google/gemma-4-26B-A4B-it")
         model_layout.addWidget(self.model_path_edit)
 
         layout.addWidget(model_group)
@@ -69,12 +71,9 @@ class AHPApplication(QMainWindow):
         prompt_group = QGroupBox("Промпты")
         self.prompt_layout = QVBoxLayout(prompt_group)
 
-        self.prompt_layout.addWidget(QLabel("Базовый промпт:"))
-        self.base_prompt = QTextEdit()
-        self.base_prompt.setMaximumHeight(100)
-        self.prompt_layout.addWidget(self.base_prompt)
-
-        self.prompt_layout.addWidget(QLabel("Описание альтернатив:"))
+        self.prompt_layout.addWidget(QLabel("Файл с текстами:"))
+        self.alt_file = QLineEdit()
+        self.prompt_layout.addWidget(self.alt_file)
 
         layout.addWidget(prompt_group)
 
@@ -87,11 +86,24 @@ class AHPApplication(QMainWindow):
         btn_layout.addWidget(self.generate_btn)
 
         layout.addLayout(btn_layout)
-
         layout.addStretch()
 
         # Добавляем вкладку после "Основные параметры"
         self.tab_widget.insertTab(1, llm_tab, "Настройки LLM")
+
+    def __fill_input(self):
+        crit_count = 6
+        alt_count = 4
+        self.criteria_spin.setValue(crit_count)
+        self.alternatives_spin.setValue(alt_count)
+        self.update_criteria_names_input(crit_count)
+        self.update_alternative_names_input(alt_count)
+        criteria_names = ['Лексика', 'Логика', 'Стилистика', 'Грамматика', 'Орфография', 'Пунктуация']
+        alt_names = ['Yandex', 'DeepL', 'ChatGPT', 'MarianMT']
+        for i in range(crit_count):
+            self.criteria_names_layout.itemAt(i).itemAt(1).setText(criteria_names[i])
+        for i in range(alt_count):
+            self.alternatives_names_layout.itemAt(i).itemAt(1).setText(alt_names[i])
 
     def setup_basic_input_tab(self):
         tab = QWidget()
@@ -244,20 +256,7 @@ class AHPApplication(QMainWindow):
                 self.data['num_alternatives'] > 0):
             self.generate_btn.setEnabled(True)
 
-        for i in range(self.alternatives_names_layout.count()):
-            layout = QHBoxLayout()
-            layout.addWidget(QLabel(self.data['alternative_names'][i]))
-            text_edit = QTextEdit()
-            layout.addWidget(text_edit)
-            self.prompt_layout.addLayout(layout)
-
-        # self.prompt_generator = PromptGenerator(self.data['criteria_names'], self.data['alternative_names'])
-        self.prompt_generator = ShortPromptGenerator()
-        self.base_prompt.setPlainText(self.prompt_generator.basic_prompt)
-        self.base_prompt.textChanged.connect(self.on_basic_prompt_changed)
-
-    def on_basic_prompt_changed(self):
-        self.prompt_generator.basic_prompt = self.base_prompt.toPlainText()
+        self.prompt_generator = LingScalePromptGenerator()
 
     def setup_expert_data_input(self):
         # Очищаем текущий контент
@@ -403,17 +402,6 @@ class AHPApplication(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка при экспорте в Excel: {str(e)}")
 
-    def _collect_alternative_descriptions(self):
-        self.alternative_descriptions = []
-        for i in range(3, self.prompt_layout.count()):
-            layout = self.prompt_layout.itemAt(i)
-            if layout:
-                text_edit = layout.itemAt(1).widget()
-                desc = text_edit.toPlainText().strip()
-                if not desc:
-                    desc = self.data['alternative_names'][i-1]
-                self.alternative_descriptions.append(desc)
-
     def get_llm_scores(self):
         """Получение оценок от LLM"""
         if not self.data['criteria_names'] or not self.data['alternative_names']:
@@ -421,8 +409,6 @@ class AHPApplication(QMainWindow):
             return
 
         self.generate_btn.setEnabled(False)
-        print('collect descriptions')
-        self._collect_alternative_descriptions()
 
         # Запускаем worker в отдельном потоке
         print("start creating worker")
@@ -431,7 +417,7 @@ class AHPApplication(QMainWindow):
             prompt_generator=self.prompt_generator,
             criteria_names=self.data['criteria_names'],
             alternative_names=self.data['alternative_names'],
-            alternative_descriptions=self.alternative_descriptions
+            alternative_descriptions_file=self.alt_file.text()
         )
 
         self.llm_worker.finished.connect(self.on_llm_finished)

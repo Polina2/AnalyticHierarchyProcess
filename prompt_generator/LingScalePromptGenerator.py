@@ -1,4 +1,7 @@
-class LingScalePromptGenerator:
+from prompt_generator.PromptGenerator import PromptGenerator
+
+
+class LingScalePromptGenerator(PromptGenerator):
     def __init__(self):
         self.basic_prompt = f"""Ты эксперт по принятию решений методом анализа иерархий.
             Тебе необходимо сравнить несколько переводов одного текста с английского на русский (альтернатив) 

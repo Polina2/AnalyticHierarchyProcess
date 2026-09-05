@@ -1,5 +1,9 @@
-class ShortPromptGenerator:
+from prompt_generator.PromptGenerator import PromptGenerator
+
+
+class ShortPromptGenerator(PromptGenerator):
     def __init__(self):
+        super().__init__()
         self.basic_prompt = f"""Ты эксперт по принятию решений методом анализа иерархий.
             Тебе необходимо решить задачу ...
             Сравни элементы по шкале Саати от 1 до 9.

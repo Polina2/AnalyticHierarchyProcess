@@ -1,3 +1,6 @@
+import abc
+
+import PyQt6.sip
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
@@ -6,13 +9,22 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from AHP import AHP
 from LLMWorkerClient import LLMWorkerClient
 from presenter.Presenter import Presenter
-from domain.Alternative import Alternative
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
 from prompt_generator.LingScalePromptGenerator import LingScalePromptGenerator
 
 
-class AHPApplication(QMainWindow, IAHPView):
+class Meta(abc.ABCMeta, PyQt6.sip.wrappertype):
+    pass
+
+
+class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
+    generate_clicked = pyqtSignal()
+    criteria_changed = pyqtSignal(int)
+    alternatives_changed = pyqtSignal(int)
+    confirm_parameters_clicked = pyqtSignal()
+    calculate_results_clicked = pyqtSignal()
+    export_clicked = pyqtSignal()
 
     def show_error(self, message: str):
         pass
@@ -21,9 +33,6 @@ class AHPApplication(QMainWindow, IAHPView):
         self.results_text.setText(results_text)
 
     def update_criteria_tree_ui(self, tree: CriterionNode):
-        pass
-
-    def update_alternatives_ui(self, alternatives: list[Alternative]):
         pass
 
     def update_expert_ui(self, expert_id: int, total: int):
@@ -52,6 +61,15 @@ class AHPApplication(QMainWindow, IAHPView):
         self.llm_worker = None
         self.prompt_generator = None
         self.setup_llm_tab()
+        self._connect_signals()
+
+    def _connect_signals(self):
+        self.generate_btn.clicked.connect(self.generate_clicked)
+        self.criteria_spin.valueChanged.connect(self.criteria_changed)
+        self.alternatives_spin.valueChanged.connect(self.alternatives_changed)
+        self.confirm_btn.clicked.connect(self.confirm_parameters_clicked)
+        self.calculate_btn.clicked.connect(self.calculate_results_clicked)
+        self.export_btn.clicked.connect(self.export_clicked)
 
     def init_ui(self):
         self.setWindowTitle('Метод анализа иерархий (AHP)')
@@ -107,7 +125,7 @@ class AHPApplication(QMainWindow, IAHPView):
         btn_layout = QHBoxLayout()
 
         self.generate_btn = QPushButton("Получить оценки от модели")
-        self.generate_btn.clicked.connect(self.get_llm_scores)
+        # self.generate_btn.clicked.connect(self.get_llm_scores)
         self.generate_btn.setEnabled(False)
         btn_layout.addWidget(self.generate_btn)
 
@@ -142,13 +160,11 @@ class AHPApplication(QMainWindow, IAHPView):
         basic_layout.addWidget(QLabel("Количество критериев:"), 0, 0)
         self.criteria_spin = QSpinBox()
         self.criteria_spin.setRange(1, 10)
-        self.criteria_spin.valueChanged.connect(self.on_criteria_changed)
         basic_layout.addWidget(self.criteria_spin, 0, 1)
 
         basic_layout.addWidget(QLabel("Количество альтернатив:"), 1, 0)
         self.alternatives_spin = QSpinBox()
         self.alternatives_spin.setRange(1, 10)
-        self.alternatives_spin.valueChanged.connect(self.on_alternatives_changed)
         basic_layout.addWidget(self.alternatives_spin, 1, 1)
 
         basic_layout.addWidget(QLabel("Количество экспертов:"), 2, 0)
@@ -169,9 +185,8 @@ class AHPApplication(QMainWindow, IAHPView):
         layout.addWidget(self.alternatives_names_group)
 
         # Кнопка подтверждения
-        confirm_btn = QPushButton("Подтвердить параметры")
-        confirm_btn.clicked.connect(self.confirm_parameters)
-        layout.addWidget(confirm_btn)
+        self.confirm_btn = QPushButton("Подтвердить параметры")
+        layout.addWidget(self.confirm_btn)
 
         self.tab_widget.addTab(tab, "Основные параметры")
 
@@ -187,9 +202,8 @@ class AHPApplication(QMainWindow, IAHPView):
 
         self.expert_layout.addWidget(self.expert_scroll)
 
-        calculate_btn = QPushButton("Рассчитать результаты")
-        calculate_btn.clicked.connect(self.on_calculate_results)
-        self.expert_layout.addWidget(calculate_btn)
+        self.calculate_btn = QPushButton("Рассчитать результаты")
+        self.expert_layout.addWidget(self.calculate_btn)
 
         self.tab_widget.addTab(self.expert_tab, "Данные экспертов")
 
@@ -201,17 +215,10 @@ class AHPApplication(QMainWindow, IAHPView):
         self.results_text.setReadOnly(True)
         layout.addWidget(self.results_text)
 
-        export_btn = QPushButton("Экспорт в Excel")
-        export_btn.clicked.connect(self.export_to_excel)
-        layout.addWidget(export_btn)
+        self.export_btn = QPushButton("Экспорт в Excel")
+        layout.addWidget(self.export_btn)
 
         self.tab_widget.addTab(self.results_tab, "Результаты")
-
-    def on_criteria_changed(self, value):
-        self.update_criteria_names_input(value)
-
-    def on_alternatives_changed(self, value):
-        self.update_alternative_names_input(value)
 
     def update_criteria_names_input(self, count):
         current_count = self.criteria_names_layout.count()

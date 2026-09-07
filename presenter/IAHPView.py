@@ -18,7 +18,11 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
-    def update_alternatives_ui(self, alternatives: list[Alternative]):
+    def update_criteria_names_input(self, count):
+        pass
+
+    @abstractmethod
+    def update_alternative_names_input(self, count):
         pass
 
     @abstractmethod
@@ -35,4 +39,8 @@ class IAHPView(ABC):
 
     @abstractmethod
     def get_genres_list(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    def export_to_excel(self):
         pass

@@ -8,14 +8,14 @@ def argsort(arr):
     return [x[0] for x in zip_arr]
 
 
-class Presenter:
+class ResultsFormatter:
     @staticmethod
-    def display_results(data, criteria_matrix, alt_matrices, criteria_weights,
-                        alt_weights, crit_consistency, alt_consistency, final_scores):
+    def format_results(data, criteria_matrix, alt_matrices, criteria_weights,
+                       alt_weights, crit_consistency, alt_consistency, final_scores):
         result_text = "РЕЗУЛЬТАТЫ МЕТОДА АНАЛИЗА ИЕРАРХИЙ\n\n"
 
         result_text += "АГРЕГИРОВАННАЯ МАТРИЦА КРИТЕРИЕВ:\n"
-        result_text += Presenter.matrix_to_string(criteria_matrix, data['criteria_names'])
+        result_text += ResultsFormatter.matrix_to_string(criteria_matrix, data['criteria_names'])
         result_text += f"\nВЕКТОР ВЕСОВ КРИТЕРИЕВ:\n"
         for i, weight in enumerate(criteria_weights):
             result_text += f"{data['criteria_names'][i]}: {weight:.4f}\n"
@@ -29,7 +29,7 @@ class Presenter:
         result_text += "МАТРИЦЫ И ВЕСА АЛЬТЕРНАТИВ ПО КРИТЕРИЯМ:\n"
         for crit_idx in range(len(alt_matrices)):
             result_text += f"\nКритерий: {data['criteria_names'][crit_idx]}\n"
-            result_text += Presenter.matrix_to_string(alt_matrices[crit_idx], data['alternative_names'])
+            result_text += ResultsFormatter.matrix_to_string(alt_matrices[crit_idx], data['alternative_names'])
             result_text += f"Веса альтернатив:\n"
             for i, weight in enumerate(alt_weights[crit_idx]):
                 result_text += f"{data['alternative_names'][i]}: {weight:.4f}\n"

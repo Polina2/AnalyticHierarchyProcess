@@ -1,37 +1,38 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+from domain.AHPState import AHPState
+from domain.CriterionNode import CriterionNode
+
 
 class AHPCalculator (ABC):
+    @abstractmethod
+    def estimate_consistency(self, matrix: np.ndarray, weights: np.ndarray) -> float:
+        pass
+
+    @abstractmethod
+    def aggregate_experts(self, tree: CriterionNode):
+        pass
+
     @abstractmethod
     def calculate_eigenvector(self, matrix: np.ndarray) -> np.ndarray:
         pass
 
     @abstractmethod
-    def estimate_consistency(self, matrix: np.ndarray, weights: np.ndarray) -> float:
+    def aggregate_criteria_tree(self, tree: CriterionNode) -> np.ndarray:
         pass
 
-    @staticmethod
-    def build_matrix_from_inputs(input_matrix, size):
-        matrix = np.ones((size, size))
+    @abstractmethod
+    def get_alternatives_matrix(self, tree: CriterionNode) -> np.ndarray:
+        pass
 
-        for i in range(size):
-            for j in range(size):
-                if i < j and input_matrix[i][j] is not None:
-                    numerator_edit, denominator_edit = input_matrix[i][j]
-                    try:
-                        numerator = float(numerator_edit.text() or 1)
-                        denominator = float(denominator_edit.text() or 1)
-                        if denominator == 0:
-                            denominator = 1
-                        value = numerator / denominator
-                        matrix[i, j] = value
-                        matrix[j, i] = 1.0 / value
-                    except ValueError:
-                        matrix[i, j] = 1.0
-                        matrix[j, i] = 1.0
+    @abstractmethod
+    def get_result(self, alt_matrix: np.ndarray, crit_vector: np.ndarray) -> np.ndarray:
+        pass
 
-        return matrix
+    @abstractmethod
+    def apply(self, state: AHPState) -> np.ndarray:
+        pass
 
     @staticmethod
     def aggregate_matrices(matrices: list[list[list[float]]]) -> list[list[float]] | None:

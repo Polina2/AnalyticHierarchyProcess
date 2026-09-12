@@ -10,6 +10,10 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
+    def show_success(self, message: str):
+        pass
+
+    @abstractmethod
     def show_results(self, results_text: str):
         pass
 
@@ -42,5 +46,9 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
-    def export_to_excel(self):
+    def get_file_path_from_dialog(self) -> str | None:
+        pass
+
+    @abstractmethod
+    def get_parameters(self) -> dict:
         pass

@@ -3,7 +3,8 @@ class CriterionNode:
         self.name = name
         self.children = []
         self.matrices = dict()
-        self.weights = dict()
+        self.weights = None
+        self.global_weights = None
         self.consistency = dict()
 
     def is_leaf(self) -> bool:

@@ -1,17 +1,15 @@
 import abc
-
+import numpy as np
 import PyQt6.sip
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
                              QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal
-from AHP import AHP
 from LLMWorkerClient import LLMWorkerClient
-from presenter.Presenter import Presenter
+from presenter.ResultsFormatter import ResultsFormatter
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
-from prompt_generator.LingScalePromptGenerator import LingScalePromptGenerator
 
 
 class Meta(abc.ABCMeta, PyQt6.sip.wrappertype):
@@ -27,7 +25,10 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     export_clicked = pyqtSignal()
 
     def show_error(self, message: str):
-        pass
+        QMessageBox.critical(self, "Ошибка", message)
+
+    def show_success(self, message: str):
+        QMessageBox.information(self, "Успех", message)
 
     def show_results(self, results_text: str):
         self.results_text.setText(results_text)
@@ -58,6 +59,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             'alternative_names': [],
             'expert_data': []
         }
+        self.expert_data = []
         self.llm_worker = None
         self.prompt_generator = None
         self.setup_llm_tab()
@@ -148,6 +150,28 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             self.criteria_names_layout.itemAt(i).itemAt(1).setText(criteria_names[i])
         for i in range(alt_count):
             self.alternatives_names_layout.itemAt(i).itemAt(1).setText(alt_names[i])
+
+    @staticmethod
+    def build_matrix_from_inputs(input_matrix, size):
+        matrix = np.ones((size, size))
+
+        for i in range(size):
+            for j in range(size):
+                if i < j and input_matrix[i][j] is not None:
+                    numerator_edit, denominator_edit = input_matrix[i][j]
+                    try:
+                        numerator = float(numerator_edit.text() or 1)
+                        denominator = float(denominator_edit.text() or 1)
+                        if denominator == 0:
+                            denominator = 1
+                        value = numerator / denominator
+                        matrix[i, j] = value
+                        matrix[j, i] = 1.0 / value
+                    except ValueError:
+                        matrix[i, j] = 1.0
+                        matrix[j, i] = 1.0
+
+        return matrix
 
     def setup_basic_input_tab(self):
         tab = QWidget()
@@ -254,14 +278,12 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                     layout.itemAt(j).widget().deleteLater()
                 layout.deleteLater()
 
-    def confirm_parameters(self):
+    def get_parameters(self):
         # Сохраняем основные параметры
-        self.data['num_criteria'] = self.criteria_spin.value()
-        self.data['num_alternatives'] = self.alternatives_spin.value()
-        self.data['num_experts'] = self.experts_spin.value()
+        data = {'num_criteria': self.criteria_spin.value(), 'num_alternatives': self.alternatives_spin.value(),
+                'num_experts': self.experts_spin.value(), 'criteria_names': [], 'alternative_names': []}
 
         # Сохраняем названия критериев
-        self.data['criteria_names'] = []
         for i in range(self.criteria_names_layout.count()):
             layout = self.criteria_names_layout.itemAt(i)
             if layout:
@@ -269,10 +291,9 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 name = line_edit.text().strip()
                 if not name:
                     name = f"Критерий {i + 1}"
-                self.data['criteria_names'].append(name)
+                data['criteria_names'].append(name)
 
         # Сохраняем названия альтернатив
-        self.data['alternative_names'] = []
         for i in range(self.alternatives_names_layout.count()):
             layout = self.alternatives_names_layout.itemAt(i)
             if layout:
@@ -280,27 +301,23 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 name = line_edit.text().strip()
                 if not name:
                     name = f"Альтернатива {i + 1}"
-                self.data['alternative_names'].append(name)
+                data['alternative_names'].append(name)
 
-        # Создаем интерфейс для ввода данных экспертов
-        self.setup_expert_data_input()
-
-        if (self.data['num_criteria'] > 0 and
-                self.data['num_alternatives'] > 0):
+        if (data['num_criteria'] > 0 and
+                data['num_alternatives'] > 0):
             self.generate_btn.setEnabled(True)
+        return data
 
-        self.prompt_generator = LingScalePromptGenerator()
-
-    def setup_expert_data_input(self):
+    def setup_expert_data_input(self, data):
         # Очищаем текущий контент
         for i in reversed(range(self.expert_scroll_layout.count())):
             widget = self.expert_scroll_layout.itemAt(i).widget()
             if widget:
                 widget.deleteLater()
 
-        n_criteria = self.data['num_criteria']
-        n_alternatives = self.data['num_alternatives']
-        n_experts = self.data['num_experts']
+        n_criteria = data['num_criteria']
+        n_alternatives = data['num_alternatives']
+        n_experts = data['num_experts']
 
         # Создаем интерфейс для каждого эксперта
         for expert_idx in range(n_experts):
@@ -314,8 +331,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
             # Заголовки строк и столбцов
             for i in range(n_criteria):
-                criteria_layout.addWidget(QLabel(self.data['criteria_names'][i]), i + 1, 0, alignment=alignment)
-                criteria_layout.addWidget(QLabel(self.data['criteria_names'][i]), 0, i + 1, alignment=alignment)
+                criteria_layout.addWidget(QLabel(data['criteria_names'][i]), i + 1, 0, alignment=alignment)
+                criteria_layout.addWidget(QLabel(data['criteria_names'][i]), 0, i + 1, alignment=alignment)
 
             # Поля ввода для матрицы критериев
             criteria_matrix_inputs = []
@@ -355,13 +372,13 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             alternatives_groups = []
             for crit_idx in range(n_criteria):
                 alt_group = QGroupBox(
-                    f"Попарные сравнения альтернатив по критерию: {self.data['criteria_names'][crit_idx]}")
+                    f"Попарные сравнения альтернатив по критерию: {data['criteria_names'][crit_idx]}")
                 alt_layout = QGridLayout(alt_group)
 
                 # Заголовки
                 for i in range(n_alternatives):
-                    alt_layout.addWidget(QLabel(self.data['alternative_names'][i]), i + 1, 0, alignment=alignment)
-                    alt_layout.addWidget(QLabel(self.data['alternative_names'][i]), 0, i + 1, alignment=alignment)
+                    alt_layout.addWidget(QLabel(data['alternative_names'][i]), i + 1, 0, alignment=alignment)
+                    alt_layout.addWidget(QLabel(data['alternative_names'][i]), 0, i + 1, alignment=alignment)
 
                 # Поля ввода
                 alt_matrix_inputs = []
@@ -403,42 +420,53 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 'criteria_matrix': criteria_matrix_inputs,
                 'alternatives_matrices': alternatives_groups
             }
-            if len(self.data['expert_data']) <= expert_idx:
-                self.data['expert_data'].append(expert_data)
+            if len(self.expert_data) <= expert_idx:
+                self.expert_data.append(expert_data)
             else:
-                self.data['expert_data'][expert_idx] = expert_data
+                self.expert_data[expert_idx] = expert_data
 
             self.expert_scroll_layout.addWidget(expert_group)
+
+    def get_expert_data(self, data):
+        n_experts = data['num_experts']
+        n_criteria = data['num_criteria']
+        n_alternatives = data['num_alternatives']
+
+        all_criteria_matrices = []
+        all_alternatives_matrices = [[] for _ in range(n_criteria)]
+
+        for expert_idx in range(n_experts):
+            expert_data = self.expert_data[expert_idx]
+
+            # Матрица критериев для текущего эксперта
+            criteria_matrix = self.build_matrix_from_inputs(
+                expert_data['criteria_matrix'], n_criteria
+            )
+            all_criteria_matrices.append(criteria_matrix)
+
+            # Матрицы альтернатив для текущего эксперта
+            for crit_idx in range(n_criteria):
+                alt_matrix = self.build_matrix_from_inputs(
+                    expert_data['alternatives_matrices'][crit_idx], n_alternatives
+                )
+                all_alternatives_matrices[crit_idx].append(alt_matrix)
+        return all_criteria_matrices, all_alternatives_matrices
 
     def display_results(self, result_text):
         self.results_text.setText(result_text)
 
-    def on_calculate_results(self):
-        ahp = AHP(self.data)
-        self.results = ahp.calculate_results()
-        result_text = Presenter.display_results(self.data, *self.results)
-        self.display_results(result_text)
-
-    def export_to_excel(self):
-        try:
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "Сохранить результаты Excel", "", "Excel Files (*.xlsx)"
-            )
-
-            if not file_path:
-                return
-
-            Presenter.export_to_excel(self.data, *self.results, file_path)
-
-            QMessageBox.information(self, "Успех", f"Результаты экспортированы в файл:\n{file_path}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка при экспорте в Excel: {str(e)}")
+    def get_file_path_from_dialog(self) -> str | None:
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Сохранить результаты Excel", "", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return None
+        return file_path
 
     def get_llm_scores(self):
         """Получение оценок от LLM"""
         if not self.data['criteria_names'] or not self.data['alternative_names']:
-            QMessageBox.warning(self, "Ошибка", "Сначала введите названия критериев и альтернатив")
+            self.show_error("Сначала введите названия критериев и альтернатив")
             return
 
         self.generate_btn.setEnabled(False)
@@ -467,7 +495,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         # Переключаемся на вкладку экспертов
         self.tab_widget.setCurrentIndex(2)  # "Данные экспертов"
 
-        QMessageBox.information(self, "Успех", "Оценки от LLM получены и заполнены!")
+        self.show_success("Оценки от LLM получены и заполнены!")
 
         # Возвращаем UI в исходное состояние
         self.generate_btn.setEnabled(True)
@@ -475,7 +503,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     def on_llm_error(self, error_message):
         """Обработка ошибки LLM"""
         self.generate_btn.setEnabled(True)
-        QMessageBox.critical(self, "Ошибка LLM", f"Не удалось получить оценки:\n{error_message}")
+        self.show_error(f"Не удалось получить оценки:\n{error_message}")
 
     def fill_matrices_with_llm_results(self, results):
         """Заполнение матриц результатами LLM"""

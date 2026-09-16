@@ -52,3 +52,15 @@ class IAHPView(ABC):
     @abstractmethod
     def get_parameters(self) -> dict:
         pass
+
+    @abstractmethod
+    def get_model_path(self) -> str:
+        pass
+
+    @abstractmethod
+    def on_llm_finished(self, results):
+        pass
+
+    @abstractmethod
+    def on_llm_error(self, error_message):
+        pass

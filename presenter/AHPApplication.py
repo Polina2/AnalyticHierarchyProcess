@@ -6,8 +6,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
                              QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal
-from LLMWorkerClient import LLMWorkerClient
-from presenter.ResultsFormatter import ResultsFormatter
+from LLM_service.APILLMProvider import APILLMProvider
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
 
@@ -127,7 +126,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         btn_layout = QHBoxLayout()
 
         self.generate_btn = QPushButton("Получить оценки от модели")
-        # self.generate_btn.clicked.connect(self.get_llm_scores)
         self.generate_btn.setEnabled(False)
         btn_layout.addWidget(self.generate_btn)
 
@@ -463,27 +461,9 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             return None
         return file_path
 
-    def get_llm_scores(self):
-        """Получение оценок от LLM"""
-        if not self.data['criteria_names'] or not self.data['alternative_names']:
-            self.show_error("Сначала введите названия критериев и альтернатив")
-            return
-
+    def get_model_path(self) -> str:
         self.generate_btn.setEnabled(False)
-
-        # Запускаем worker в отдельном потоке
-        print("start creating worker")
-        self.llm_worker = LLMWorkerClient(
-            model_path=self.model_path_edit.currentText(),
-            prompt_generator=self.prompt_generator,
-            criteria_names=self.data['criteria_names'],
-            alternative_names=self.data['alternative_names'],
-            alternative_descriptions_file=self.alt_file.text()
-        )
-
-        self.llm_worker.finished.connect(self.on_llm_finished)
-        self.llm_worker.error.connect(self.on_llm_error)
-        self.llm_worker.start()
+        return self.model_path_edit.currentText()
 
     def on_llm_finished(self, results):
         """Обработка завершения работы LLM"""
@@ -491,17 +471,13 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         print("start filling ui with results")
         self.fill_matrices_with_llm_results(results)
         print("filled with results")
-
         # Переключаемся на вкладку экспертов
         self.tab_widget.setCurrentIndex(2)  # "Данные экспертов"
-
         self.show_success("Оценки от LLM получены и заполнены!")
-
         # Возвращаем UI в исходное состояние
         self.generate_btn.setEnabled(True)
 
     def on_llm_error(self, error_message):
-        """Обработка ошибки LLM"""
         self.generate_btn.setEnabled(True)
         self.show_error(f"Не удалось получить оценки:\n{error_message}")
 

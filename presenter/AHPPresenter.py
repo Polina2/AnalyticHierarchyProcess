@@ -1,19 +1,22 @@
+from LLM_service.APILLMProvider import APILLMProvider
+from LLM_service.BaseLLMProvider import BaseLLMProvider
+from LLM_service.LocalLLMProvider import LocalLLMProvider
 from calculator.CalculatorFactory import CalculatorFactory
 from domain.AHPState import AHPState
 from presenter.IAHPView import IAHPView
 from presenter.ResultsFormatter import ResultsFormatter
-from prompt_generator.PromptGenerator import PromptGenerator
+from prompt_generator.LingScalePromptGenerator import LingScalePromptGenerator
 
 
 class AHPPresenter:
+
     def __init__(
-            self, view: IAHPView, state: AHPState, calculator_factory: CalculatorFactory,
-            prompt_gen: PromptGenerator
+            self, view: IAHPView, state: AHPState, calculator_factory: CalculatorFactory
     ):
         self.view = view
         self.state = state
         self.calculator = calculator_factory.create('crisp')
-        self.prompt_generator = prompt_gen
+        self.llm_provider = None
         self._connect_signals()
 
     def _connect_signals(self):
@@ -25,7 +28,23 @@ class AHPPresenter:
         self.view.export_clicked.connect(self.on_export_clicked)
 
     def on_generate_clicked(self):
-        pass
+        prompt_generator = LingScalePromptGenerator()
+        model_path = self.view.get_model_path()
+        if model_path[0] == '.' or model_path[1] == ':':
+            self.llm_provider = LocalLLMProvider(
+                model_path=model_path,
+                prompt_generator=prompt_generator,
+                state=self.state
+            )
+        else:
+            self.llm_provider = APILLMProvider(
+                model_path=model_path,
+                prompt_generator=prompt_generator,
+                state=self.state
+            )
+        self.llm_provider.finished.connect(self.view.on_llm_finished)
+        self.llm_provider.error.connect(self.view.on_llm_error)
+        self.llm_provider.start()
 
     def on_confirm_parameters_clicked(self):
         data = self.view.get_parameters()

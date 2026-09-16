@@ -1,8 +1,7 @@
-from PyQt6.QtCore import QThread, pyqtSignal
-import json
-import numpy as np
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, logging, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, logging
+from PyQt6.QtCore import pyqtSignal
+from LLM_service.BaseLLMProvider import BaseLLMProvider
 
 
 def _replace_fractions(s):
@@ -21,39 +20,16 @@ def _replace_fractions(s):
     return ''.join(new_str)
 
 
-def parse_response(prompt, response, size):
-    """Парсинг ответа модели"""
-    try:
-        # Ищем JSON в ответе
-        if prompt in response:
-            response = response[len(prompt):]
-        print(response)
-        start = response.find('{')
-        end = response.find('}', start) + 1
-        if start != -1 and end != 0:
-            response = response[start:end]
-            print(response)
-            response = _replace_fractions(response)
-            print(response)
-            data = json.loads(response)
-            matrix = data.get('matrix', np.ones((size, size)).tolist())
-            return matrix
-    except Exception as e:
-        print(e)
-    # Возвращаем единичную матрицу при ошибке
-    return np.identity(size).tolist()
 
-
-class LLMWorker(QThread):
-    """Поток для работы с LLM"""
+class LocalLLMProvider(BaseLLMProvider):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, model_path, prompt_generator, basic_prompt):
+    def __init__(self, model_path, prompt_generator, state):
         super().__init__()
         self.model_path = model_path
         self.prompt_generator = prompt_generator
-        self.basic_prompt = basic_prompt,
+        self.state = state
         self.model = None
         self.tokenizer = None
         logging.set_verbosity_info()
@@ -96,7 +72,8 @@ class LLMWorker(QThread):
             print("criteria generated")
             print(results['criteria_matrix'])
             # Генерируем матрицы для альтернатив по каждому критерию
-            for crit_name in self.prompt_generator.criteria_names:
+            criteria_names = [crit.name for crit in self.state.criteria_tree.children]
+            for crit_name in criteria_names:
                 matrix = self.generate_alternative_matrix(crit_name)
                 results['alternative_matrices'].append(matrix)
                 print("alternative generated")
@@ -109,20 +86,10 @@ class LLMWorker(QThread):
             self.error.emit(str(e))
 
     def generate_criteria_matrix(self):
-        """Генерация матрицы критериев"""
-        prompt = self.basic_prompt + self.prompt_generator.get_criteria_prompt
-
-        response = self.call_model(prompt)
-        print("got criteria response")
-        return parse_response(prompt, response, len(self.prompt_generator.criteria_names))
+        super().generate_criteria_matrix()
 
     def generate_alternative_matrix(self, criterion):
-        """Генерация матрицы альтернатив для критерия"""
-        prompt = self.basic_prompt + self.prompt_generator.get_alternative_prompt(criterion)
-
-        response = self.call_model(prompt)
-        print("got alternative response")
-        return parse_response(prompt, response, len(self.prompt_generator.alternative_names))
+        super().generate_alternative_matrix(criterion)
 
     def call_model(self, prompt):
         """Вызов модели"""

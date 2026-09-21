@@ -56,9 +56,8 @@ class AHPPresenter:
 
         final_scores = self.calculator.apply(self.state)
         self.state.final_scores = final_scores
-        print(final_scores)
 
-        result_text = ResultsFormatter.format_results(self.state.to_data(), *self.state.to_results(), final_scores)
+        result_text = ResultsFormatter.format_results(self.state)
         self.view.show_results(result_text)
 
     def on_export_clicked(self):

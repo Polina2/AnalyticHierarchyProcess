@@ -1,4 +1,8 @@
 import pandas as pd
+import numpy as np
+
+from domain.AHPState import AHPState
+from domain.CriterionNode import CriterionNode
 
 
 def argsort(arr):
@@ -10,7 +14,226 @@ def argsort(arr):
 
 class ResultsFormatter:
     @staticmethod
-    def format_results(data, criteria_matrix, alt_matrices, criteria_weights,
+    def format_results(state: AHPState) -> str:
+        """
+        Форматирует результаты AHP из состояния.
+        Выводит все агрегированные матрицы, локальные и глобальные веса для каждого узла,
+        включая корневой.
+
+        :param state: AHPState с вычисленными результатами
+        :return: Отформатированный текст результатов
+        """
+        result_text = "РЕЗУЛЬТАТЫ МЕТОДА АНАЛИЗА ИЕРАРХИЙ\n\n"
+
+        # Структура дерева
+        result_text += "СТРУКТУРА ДЕРЕВА КРИТЕРИЕВ:\n"
+        result_text += ResultsFormatter._format_tree_structure(state.criteria_tree, 0)
+        result_text += "\n" + "=" * 60 + "\n\n"
+
+        # Вывод данных корневого узла
+        root = state.criteria_tree
+        if root.children:
+            root_labels = [c.name for c in root.children]
+
+            result_text += "Корень (сравнение критериев верхнего уровня)\n"
+
+            # Агрегированная матрица
+            if 'aggregated_matrix' in root.matrices:
+                matrix = root.matrices['aggregated_matrix']
+                result_text += "Агрегированная матрица парных сравнений:\n"
+                result_text += ResultsFormatter._indent_text(
+                    ResultsFormatter.matrix_to_string(matrix, root_labels),
+                    "  "
+                )
+
+            # Локальные веса
+            if root.weights is not None:
+                result_text += "Локальные веса:\n"
+                for i, weight in enumerate(root.weights):
+                    result_text += f"  {root_labels[i]}: {float(weight):.4f}\n"
+
+            # Глобальные веса
+            if root.global_weights is not None:
+                result_text += "Глобальные веса:\n"
+                for i, weight in enumerate(root.global_weights):
+                    result_text += f"  {root_labels[i]}: {float(weight):.4f}\n"
+
+            # Согласованность
+            result_text += ResultsFormatter._format_consistency(root.consistency, "")
+
+            result_text += "\n" + "=" * 60 + "\n\n"
+
+        # Рекурсивно обходим потомков корня
+        result_text += ResultsFormatter._format_node_results(
+            state.criteria_tree,
+            state.alternatives,
+            depth=0
+        )
+
+        # Финальные оценки альтернатив
+        result_text += "\n" + "=" * 60 + "\n"
+        result_text += "ФИНАЛЬНЫЕ ОЦЕНКИ АЛЬТЕРНАТИВ:\n"
+        result_text += "-" * 60 + "\n"
+
+        alt_names = [alt.name for alt in state.alternatives]
+        final_scores = state.final_scores  # numpy.ndarray
+
+        # Сортируем по убыванию
+        sorted_indices = np.argsort(final_scores)[::-1]
+
+        for rank, idx in enumerate(sorted_indices, 1):
+            result_text += f"{rank}. {alt_names[idx]}: {final_scores[idx]:.4f}\n"
+
+        return result_text
+
+    @staticmethod
+    def _format_tree_structure(node: CriterionNode, depth: int) -> str:
+        """Рекурсивно форматирует структуру дерева"""
+        result = ""
+        indent = "  " * depth
+
+        if depth == 0:
+            result += f"{indent}Root\n"
+
+        for child in node.children:
+            if child.is_leaf():
+                result += f"{indent}└─ {child.name} [лист]\n"
+            else:
+                result += f"{indent}└─ {child.name}\n"
+                result += ResultsFormatter._format_tree_structure(child, depth + 1)
+
+        return result
+
+    @staticmethod
+    def _format_consistency(consistency: dict, indent: str) -> str:
+        """
+        Форматирует согласованность.
+        consistency: dict[int, dict[str, float]] где str — 'index' и 'relation'
+        """
+        if not consistency:
+            return ""
+
+        result = f"{indent}Согласованность:\n"
+
+        for key, metrics in consistency.items():
+            # Подпись ключа
+            if isinstance(key, int):
+                key_label = f"Эксперт {key + 1}"
+            elif key == 'aggregated_matrix':
+                key_label = 'Агрегированная матрица'
+            else:
+                key_label = str(key)
+
+            result += f"{indent}  {key_label}:\n"
+
+            if isinstance(metrics, dict):
+                # Индекс согласованности (CI)
+                if 'index' in metrics:
+                    ci_value = float(metrics['index'])
+                    result += f"{indent}    Индекс согласованности: {ci_value:.4f}\n"
+
+                # Отношение согласованности (CR) в процентах
+                if 'relation' in metrics:
+                    cr_value = float(metrics['relation'])
+                    cr_percent = cr_value * 100
+                    result += f"{indent}    Отношение согласованности: {cr_percent:.2f}%\n"
+
+                # Другие метрики (если появятся)
+                for metric_key, metric_value in metrics.items():
+                    if metric_key not in ('index', 'relation'):
+                        if isinstance(metric_value, (int, float, np.floating)):
+                            result += f"{indent}    {metric_key}: {float(metric_value):.4f}\n"
+                        else:
+                            result += f"{indent}    {metric_key}: {metric_value}\n"
+            else:
+                if isinstance(metrics, (int, float, np.floating)):
+                    result += f"{indent}    {float(metrics):.4f}\n"
+                else:
+                    result += f"{indent}    {metrics}\n"
+
+        return result
+
+    @staticmethod
+    def _format_node_results(
+            node: CriterionNode,
+            alternatives: list,
+            depth: int
+    ) -> str:
+        """Рекурсивно форматирует результаты для потомков узла"""
+        result = ""
+        indent = "  " * depth
+
+        for child in node.children:
+            result += f"{indent}Критерий: {child.name}\n"
+
+            # Определяем labels в зависимости от типа узла
+            if child.is_leaf():
+                labels = [alt.name for alt in alternatives]
+            else:
+                labels = [c.name for c in child.children]
+
+            # Агрегированная матрица парных сравнений
+            if 'aggregated_matrix' in child.matrices:
+                matrix = child.matrices['aggregated_matrix']
+                result += f"{indent}Агрегированная матрица парных сравнений:\n"
+                result += ResultsFormatter._indent_text(
+                    ResultsFormatter.matrix_to_string(matrix, labels),
+                    indent + "  "
+                )
+
+            # Локальные веса
+            if child.weights is not None:
+                result += f"{indent}Локальные веса:\n"
+                for i, weight in enumerate(child.weights):
+                    result += f"{indent}  {labels[i]}: {float(weight):.4f}\n"
+
+            # Глобальные веса
+            if child.global_weights is not None:
+                result += f"{indent}Глобальные веса:\n"
+                for i, weight in enumerate(child.global_weights):
+                    result += f"{indent}  {labels[i]}: {float(weight):.4f}\n"
+
+            # Согласованность
+            result += ResultsFormatter._format_consistency(child.consistency, indent)
+
+            result += "\n"
+
+            # Рекурсия для потомков
+            if not child.is_leaf():
+                result += ResultsFormatter._format_node_results(
+                    child,
+                    alternatives,
+                    depth + 1
+                )
+
+        return result
+
+    @staticmethod
+    def _indent_text(text: str, indent: str) -> str:
+        """Добавляет отступ к каждой строке текста"""
+        lines = text.split('\n')
+        return '\n'.join(indent + line if line.strip() else line for line in lines)
+
+    @staticmethod
+    def matrix_to_string(matrix, labels) -> str:
+        """Форматирует матрицу в строку"""
+        n = len(labels)
+
+        # Заголовки столбцов
+        result = f"{' ':<25}" + "".join([f"{label:<12}" for label in labels]) + "\n"
+
+        # Строки матрицы
+        for i in range(n):
+            result += f"{labels[i]:<20}"
+            for j in range(n):
+                value = float(matrix[i, j]) if isinstance(matrix, np.ndarray) else matrix[i][j]
+                result += f"{value:<12.4f}"
+            result += "\n"
+
+        return result + "\n"
+
+    @staticmethod
+    def format_results1(data, criteria_matrix, alt_matrices, criteria_weights,
                        alt_weights, crit_consistency, alt_consistency, final_scores):
         result_text = "РЕЗУЛЬТАТЫ МЕТОДА АНАЛИЗА ИЕРАРХИЙ\n\n"
 
@@ -50,7 +273,7 @@ class ResultsFormatter:
         return result_text
 
     @staticmethod
-    def matrix_to_string(matrix, labels):
+    def matrix_to_string1(matrix, labels):
         n = len(labels)
         result = f"{' ':<30}" + "".join([f"{label:<15}" for label in labels]) + "\n"
         for i in range(n):

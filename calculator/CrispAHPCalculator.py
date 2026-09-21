@@ -14,7 +14,7 @@ class CrispAHPCalculator(AHPCalculator):
             cur_node = node_queue.popleft()
             cur_node.matrices['aggregated_matrix'] = (
                 AHPCalculator
-                .aggregate_matrices([cur_node.matrices[i] for i in range(1, len(cur_node.matrices)+1)])
+                .aggregate_matrices([cur_node.matrices[i] for i in range(len(cur_node.matrices))])
             )
             cur_node.weights = self.calculate_eigenvector(cur_node.matrices['aggregated_matrix'])
             for child in cur_node.children:
@@ -31,7 +31,7 @@ class CrispAHPCalculator(AHPCalculator):
         for i, ch in enumerate(node.children):
             if not ch.is_leaf():
                 ch.global_weights = ch.weights * weights[i]
-                self._get_criteria_weights(ch, ch.global_weights)
+                self._get_criteria_weights(ch, result)
             else:
                 result.append(weights[i])
 

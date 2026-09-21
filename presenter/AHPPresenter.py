@@ -21,7 +21,6 @@ class AHPPresenter:
 
     def _connect_signals(self):
         self.view.generate_clicked.connect(self.on_generate_clicked)
-        self.view.criteria_changed.connect(self.on_criteria_changed)
         self.view.alternatives_changed.connect(self.on_alternatives_changed)
         self.view.confirm_parameters_clicked.connect(self.on_confirm_parameters_clicked)
         self.view.calculate_results_clicked.connect(self.on_calculate_results_clicked)
@@ -53,13 +52,11 @@ class AHPPresenter:
 
     def on_calculate_results_clicked(self):
         # get expert data from ui
-        crit_matrices, alt_matrices = self.view.get_expert_data(self.state.to_data())
-        self.state.criteria_tree.matrices = dict(zip(range(1, len(crit_matrices)+1), crit_matrices))
-        for i in range(len(crit_matrices[0])):
-            self.state.criteria_tree.children[i].matrices = dict(zip(range(1, len(alt_matrices[0])+1), alt_matrices[i]))
+        self.view.get_expert_data(self.state.to_data())
 
         final_scores = self.calculator.apply(self.state)
         self.state.final_scores = final_scores
+        print(final_scores)
 
         result_text = ResultsFormatter.format_results(self.state.to_data(), *self.state.to_results(), final_scores)
         self.view.show_results(result_text)
@@ -73,9 +70,6 @@ class AHPPresenter:
             self.view.show_success(f"Результаты экспортированы в файл:\n{file_path}")
         except Exception as e:
             self.view.show_error(f"Ошибка при экспорте в Excel: {str(e)}")
-
-    def on_criteria_changed(self, value):
-        self.view.update_criteria_names_input(value)
 
     def on_alternatives_changed(self, value):
         self.view.update_alternative_names_input(value)

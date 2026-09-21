@@ -27,19 +27,16 @@ class AHPState:
 
     def from_data(self, data):
         self.experts_count = data['num_experts']
-        for i in range(data['num_criteria']):
-            self.criteria_tree.add_child(CriterionNode(data['criteria_names'][i]))
+        self.criteria_tree = data['criteria_tree']
         for i in range(data['num_alternatives']):
             self.alternatives.append(Alternative(data['alternative_names'][i]))
 
     def to_data(self) -> dict:
         data = {
-            'num_criteria': len(self.criteria_tree.children),
             'num_alternatives': len(self.alternatives),
             'num_experts': self.experts_count,
-            'criteria_names': [child.name for child in self.criteria_tree.children],
             'alternative_names': [alt.name for alt in self.alternatives],
-            'expert_data': None
+            'criteria_tree': self.criteria_tree
         }
         return data
 

@@ -22,10 +22,6 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
-    def update_criteria_names_input(self, count):
-        pass
-
-    @abstractmethod
     def update_alternative_names_input(self, count):
         pass
 

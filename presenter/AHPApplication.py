@@ -4,9 +4,9 @@ import PyQt6.sip
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
-                             QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox)
+                             QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox, QTreeWidget, QHeaderView,
+                             QTreeWidgetItem)
 from PyQt6.QtCore import Qt, pyqtSignal
-from LLM_service.APILLMProvider import APILLMProvider
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
 
@@ -17,7 +17,6 @@ class Meta(abc.ABCMeta, PyQt6.sip.wrappertype):
 
 class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     generate_clicked = pyqtSignal()
-    criteria_changed = pyqtSignal(int)
     alternatives_changed = pyqtSignal(int)
     confirm_parameters_clicked = pyqtSignal()
     calculate_results_clicked = pyqtSignal()
@@ -50,23 +49,11 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     def __init__(self):
         super().__init__()
         self.init_ui()
-        self.data = {
-            'num_criteria': 0,
-            'num_alternatives': 0,
-            'num_experts': 0,
-            'criteria_names': [],
-            'alternative_names': [],
-            'expert_data': []
-        }
         self.expert_data = []
-        self.llm_worker = None
-        self.prompt_generator = None
-        self.setup_llm_tab()
         self._connect_signals()
 
     def _connect_signals(self):
         self.generate_btn.clicked.connect(self.generate_clicked)
-        self.criteria_spin.valueChanged.connect(self.criteria_changed)
         self.alternatives_spin.valueChanged.connect(self.alternatives_changed)
         self.confirm_btn.clicked.connect(self.confirm_parameters_clicked)
         self.calculate_btn.clicked.connect(self.calculate_results_clicked)
@@ -83,13 +70,10 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.tab_widget = QTabWidget()
         layout.addWidget(self.tab_widget)
 
-        # Вкладка ввода основных параметров
         self.setup_basic_input_tab()
-        # self.__fill_input()
-        # Вкладка ввода данных экспертов
         self.setup_expert_input_tab()
-        # Вкладка результатов
         self.setup_results_tab()
+        self.setup_llm_tab()
 
     def setup_llm_tab(self):
         """Создаем вкладку настроек LLM"""
@@ -135,20 +119,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         # Добавляем вкладку после "Основные параметры"
         self.tab_widget.insertTab(1, llm_tab, "Настройки LLM")
 
-    def __fill_input(self):
-        crit_count = 6
-        alt_count = 4
-        self.criteria_spin.setValue(crit_count)
-        self.alternatives_spin.setValue(alt_count)
-        self.update_criteria_names_input(crit_count)
-        self.update_alternative_names_input(alt_count)
-        criteria_names = ['Лексика', 'Логика', 'Стилистика', 'Грамматика', 'Орфография', 'Пунктуация']
-        alt_names = ['Yandex', 'DeepL', 'ChatGPT', 'MarianMT']
-        for i in range(crit_count):
-            self.criteria_names_layout.itemAt(i).itemAt(1).setText(criteria_names[i])
-        for i in range(alt_count):
-            self.alternatives_names_layout.itemAt(i).itemAt(1).setText(alt_names[i])
-
     @staticmethod
     def build_matrix_from_inputs(input_matrix, size):
         matrix = np.ones((size, size))
@@ -179,26 +149,39 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         basic_group = QGroupBox("Основные параметры")
         basic_layout = QGridLayout(basic_group)
 
-        basic_layout.addWidget(QLabel("Количество критериев:"), 0, 0)
-        self.criteria_spin = QSpinBox()
-        self.criteria_spin.setRange(1, 10)
-        basic_layout.addWidget(self.criteria_spin, 0, 1)
-
-        basic_layout.addWidget(QLabel("Количество альтернатив:"), 1, 0)
+        basic_layout.addWidget(QLabel("Количество альтернатив:"), 0, 0)
         self.alternatives_spin = QSpinBox()
         self.alternatives_spin.setRange(1, 10)
-        basic_layout.addWidget(self.alternatives_spin, 1, 1)
+        basic_layout.addWidget(self.alternatives_spin, 0, 1)
 
-        basic_layout.addWidget(QLabel("Количество экспертов:"), 2, 0)
+        basic_layout.addWidget(QLabel("Количество экспертов:"), 1, 0)
         self.experts_spin = QSpinBox()
         self.experts_spin.setRange(1, 10)
-        basic_layout.addWidget(self.experts_spin, 2, 1)
+        basic_layout.addWidget(self.experts_spin, 1, 1)
 
         layout.addWidget(basic_group)
 
         # Ввод названий критериев
         self.criteria_names_group = QGroupBox("Названия критериев")
         self.criteria_names_layout = QVBoxLayout(self.criteria_names_group)
+
+        # Дерево
+        self.criteria_tree_widget = QTreeWidget()
+        self.criteria_tree_widget.setHeaderLabels(["", ""])
+        self.criteria_tree_widget.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.criteria_tree_widget.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self.criteria_tree_widget.header().resizeSection(1, 100)
+        self.criteria_names_layout.addWidget(self.criteria_tree_widget)
+
+        # Кнопка добавления корневого критерия
+        btn_layout = QHBoxLayout()
+        self.add_root_criterion_btn = QPushButton("Добавить критерий")
+        self.add_root_criterion_btn.clicked.connect(self._on_add_root_criterion)
+        btn_layout.addWidget(self.add_root_criterion_btn)
+        btn_layout.addStretch()
+        self.criteria_names_layout.addLayout(btn_layout)
+        # self._on_add_root_criterion()
+
         layout.addWidget(self.criteria_names_group)
 
         # Ввод названий альтернатив
@@ -211,6 +194,38 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         layout.addWidget(self.confirm_btn)
 
         self.tab_widget.addTab(tab, "Основные параметры")
+
+    def _on_add_root_criterion(self):
+        """Добавить корневой критерий"""
+        item = QTreeWidgetItem(self.criteria_tree_widget.invisibleRootItem())
+        item.setText(0, "")
+        self._add_tree_item_controls(item)
+        # self._add_tree_item_button(item)
+
+    def _add_tree_item_controls(self, item: QTreeWidgetItem):
+        """Добавить кнопки управления к элементу дерева"""
+        self._add_tree_item_button(item)
+        # Line edit для названия
+        self._add_tree_item_line_edit(item)
+
+    def _add_tree_item_button(self, item: QTreeWidgetItem):
+        # Кнопка добавления потомка
+        add_btn = QPushButton("+")
+        add_btn.setFixedWidth(30)
+        add_btn.clicked.connect(lambda: self._on_add_child(item))
+        self.criteria_tree_widget.setItemWidget(item, 1, add_btn)
+
+    def _add_tree_item_line_edit(self, item: QTreeWidgetItem):
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Название критерия")
+        self.criteria_tree_widget.setItemWidget(item, 0, name_edit)
+
+    def _on_add_child(self, parent_item: QTreeWidgetItem):
+        """Добавить потомка к выбранному элементу"""
+        child_item = QTreeWidgetItem(parent_item)
+        child_item.setText(0, "")
+        self._add_tree_item_controls(child_item)
+        parent_item.setExpanded(True)
 
     def setup_expert_input_tab(self):
         self.expert_tab = QWidget()
@@ -242,23 +257,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
         self.tab_widget.addTab(self.results_tab, "Результаты")
 
-    def update_criteria_names_input(self, count):
-        current_count = self.criteria_names_layout.count()
-        if current_count < count:
-            for i in range(current_count, count):
-                layout = QHBoxLayout()
-                layout.addWidget(QLabel(f"Критерий {i + 1}:"))
-                line_edit = QLineEdit()
-                line_edit.setPlaceholderText(f"Введите название критерия {i + 1}")
-                layout.addWidget(line_edit)
-                self.criteria_names_layout.addLayout(layout)
-        elif current_count > count:
-            for i in range(current_count - 1, count - 1, -1):
-                layout = self.criteria_names_layout.itemAt(i).layout()
-                for j in reversed(range(layout.count())):
-                    layout.itemAt(j).widget().deleteLater()
-                layout.deleteLater()
-
     def update_alternative_names_input(self, count):
         current_count = self.alternatives_names_layout.count()
         if current_count < count:
@@ -278,18 +276,9 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
     def get_parameters(self):
         # Сохраняем основные параметры
-        data = {'num_criteria': self.criteria_spin.value(), 'num_alternatives': self.alternatives_spin.value(),
-                'num_experts': self.experts_spin.value(), 'criteria_names': [], 'alternative_names': []}
-
-        # Сохраняем названия критериев
-        for i in range(self.criteria_names_layout.count()):
-            layout = self.criteria_names_layout.itemAt(i)
-            if layout:
-                line_edit = layout.itemAt(1).widget()
-                name = line_edit.text().strip()
-                if not name:
-                    name = f"Критерий {i + 1}"
-                data['criteria_names'].append(name)
+        data = {'num_alternatives': self.alternatives_spin.value(),
+                'num_experts': self.experts_spin.value(), 'alternative_names': [],
+                'criteria_tree': self._build_criteria_tree_from_ui()}
 
         # Сохраняем названия альтернатив
         for i in range(self.alternatives_names_layout.count()):
@@ -301,10 +290,46 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                     name = f"Альтернатива {i + 1}"
                 data['alternative_names'].append(name)
 
-        if (data['num_criteria'] > 0 and
-                data['num_alternatives'] > 0):
+        if data['criteria_tree'].children and data['num_alternatives'] > 0:
             self.generate_btn.setEnabled(True)
         return data
+
+    def _build_criteria_tree_from_ui(self) -> CriterionNode:
+        """Построить дерево критериев из UI"""
+        root = CriterionNode(name="Root")
+        root_item = self.criteria_tree_widget.invisibleRootItem()
+
+        for i in range(root_item.childCount()):
+            child_item = root_item.child(i)
+            node = self._tree_item_to_node(child_item)
+            if node:
+                root.add_child(node)
+
+        return root
+
+    def _tree_item_to_node(self, item: QTreeWidgetItem) -> CriterionNode | None:
+        """Рекурсивно преобразовать QTreeWidgetItem в CriterionNode"""
+        name_edit = self.criteria_tree_widget.itemWidget(item, 0)
+        if not name_edit:
+            return None
+        name = name_edit.text().strip()
+        if not name:
+            name = f"Критерий_{id(item)}"
+        node = CriterionNode(name=name)
+
+        for i in range(item.childCount()):
+            child_item = item.child(i)
+            child_node = self._tree_item_to_node(child_item)
+            if child_node:
+                node.add_child(child_node)
+
+        return node
+
+    class ExpertDataInputNode:
+        def __init__(self, name=None):
+            self.name = name
+            self.matrix_inputs = None
+            self.children = []
 
     def setup_expert_data_input(self, data):
         # Очищаем текущий контент
@@ -313,142 +338,138 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             if widget:
                 widget.deleteLater()
 
-        n_criteria = data['num_criteria']
         n_alternatives = data['num_alternatives']
         n_experts = data['num_experts']
+        criteria_tree = data['criteria_tree']
+        alternative_names = data['alternative_names']
 
         # Создаем интерфейс для каждого эксперта
         for expert_idx in range(n_experts):
             expert_group = QGroupBox(f"Эксперт {expert_idx + 1}")
             expert_layout = QVBoxLayout(expert_group)
 
-            # Матрица попарных сравнений критериев
-            criteria_group = QGroupBox("Попарные сравнения критериев")
-            criteria_layout = QGridLayout(criteria_group)
-            alignment = Qt.AlignmentFlag.AlignHCenter
+            # Создаем матрицы для каждого узла дерева
+            expert_data = self.ExpertDataInputNode()
+            self._create_node_matrices_ui(
+                expert_layout,
+                criteria_tree,
+                n_alternatives,
+                alternative_names,
+                expert_data,
+                expert_idx
+            )
 
-            # Заголовки строк и столбцов
-            for i in range(n_criteria):
-                criteria_layout.addWidget(QLabel(data['criteria_names'][i]), i + 1, 0, alignment=alignment)
-                criteria_layout.addWidget(QLabel(data['criteria_names'][i]), 0, i + 1, alignment=alignment)
-
-            # Поля ввода для матрицы критериев
-            criteria_matrix_inputs = []
-            for i in range(n_criteria):
-                row_inputs = []
-                for j in range(n_criteria):
-                    if i == j:
-                        label = QLabel("1")
-                        criteria_layout.addWidget(label, i + 1, j + 1, alignment=alignment)
-                        row_inputs.append(None)
-                    elif i < j:
-                        input_layout = QHBoxLayout()
-                        numerator = QLineEdit()
-                        numerator.setPlaceholderText("1")
-                        numerator.setText("1")
-                        numerator.setFixedWidth(30)
-                        denominator = QLineEdit()
-                        denominator.setPlaceholderText("1")
-                        denominator.setText("1")
-                        denominator.setFixedWidth(30)
-                        slash_label = QLabel("/")
-                        input_layout.addStretch()
-                        input_layout.addWidget(numerator)
-                        input_layout.addWidget(slash_label)
-                        input_layout.addWidget(denominator)
-                        input_layout.addStretch()
-
-                        criteria_layout.addLayout(input_layout, i + 1, j + 1, alignment=alignment)
-                        row_inputs.append((numerator, denominator))
-                    else:
-                        row_inputs.append(None)
-                criteria_matrix_inputs.append(row_inputs)
-
-            expert_layout.addWidget(criteria_group)
-
-            # Матрицы попарных сравнений альтернатив по каждому критерию
-            alternatives_groups = []
-            for crit_idx in range(n_criteria):
-                alt_group = QGroupBox(
-                    f"Попарные сравнения альтернатив по критерию: {data['criteria_names'][crit_idx]}")
-                alt_layout = QGridLayout(alt_group)
-
-                # Заголовки
-                for i in range(n_alternatives):
-                    alt_layout.addWidget(QLabel(data['alternative_names'][i]), i + 1, 0, alignment=alignment)
-                    alt_layout.addWidget(QLabel(data['alternative_names'][i]), 0, i + 1, alignment=alignment)
-
-                # Поля ввода
-                alt_matrix_inputs = []
-                for i in range(n_alternatives):
-                    row_inputs = []
-                    for j in range(n_alternatives):
-                        if i == j:
-                            label = QLabel("1")
-                            alt_layout.addWidget(label, i + 1, j + 1, alignment=alignment)
-                            row_inputs.append(None)
-                        elif i < j:
-                            input_layout = QHBoxLayout()
-                            numerator = QLineEdit()
-                            numerator.setPlaceholderText("1")
-                            numerator.setText("1")
-                            numerator.setFixedWidth(30)
-                            denominator = QLineEdit()
-                            denominator.setPlaceholderText("1")
-                            denominator.setText("1")
-                            denominator.setFixedWidth(30)
-                            slash_label = QLabel("/")
-                            input_layout.addStretch()
-                            input_layout.addWidget(numerator)
-                            input_layout.addWidget(slash_label)
-                            input_layout.addWidget(denominator)
-                            input_layout.addStretch()
-
-                            alt_layout.addLayout(input_layout, i + 1, j + 1, alignment=alignment)
-                            row_inputs.append((numerator, denominator))
-                        else:
-                            row_inputs.append(None)
-                    alt_matrix_inputs.append(row_inputs)
-
-                alternatives_groups.append(alt_matrix_inputs)
-                expert_layout.addWidget(alt_group)
-
-            # Сохраняем ссылки на поля ввода
-            expert_data = {
-                'criteria_matrix': criteria_matrix_inputs,
-                'alternatives_matrices': alternatives_groups
-            }
-            if len(self.expert_data) <= expert_idx:
-                self.expert_data.append(expert_data)
-            else:
-                self.expert_data[expert_idx] = expert_data
-
+            self.expert_data.append(expert_data)
             self.expert_scroll_layout.addWidget(expert_group)
+
+    def _create_node_matrices_ui(
+            self,
+            parent_layout: QVBoxLayout,
+            node: CriterionNode,
+            n_alternatives: int,
+            alternative_names: list[str],
+            expert_data: ExpertDataInputNode,
+            expert_idx: int
+    ):
+        expert_data.name = node.name
+        """Рекурсивно создать матрицы для всех узлов дерева"""
+        if node.is_leaf():
+            # Лист — матрица сравнений альтернатив
+            group = QGroupBox(f"Альтернативы по критерию: {node.name}")
+            layout = QGridLayout(group)
+            matrix_inputs = self._create_matrix_input_ui(
+                layout,
+                alternative_names,
+                n_alternatives
+            )
+            expert_data.matrix_inputs = matrix_inputs
+        else:
+            # Внутренний узел — матрица сравнений потомков
+            child_names = [c.name for c in node.children]
+            group = QGroupBox(f"Потомки критерия: {node.name}" if node.name != 'Root' else 'Корневые критерии')
+            layout = QGridLayout(group)
+            matrix_inputs = self._create_matrix_input_ui(
+                layout,
+                child_names,
+                len(child_names)
+            )
+            expert_data.matrix_inputs = matrix_inputs
+        parent_layout.addWidget(group)
+        for child_node in node.children:
+            expert_data.children.append(self.ExpertDataInputNode())
+            child_expert_data = expert_data.children[-1]
+            # Рекурсия для потомков
+            self._create_node_matrices_ui(
+                parent_layout,
+                child_node,
+                n_alternatives,
+                alternative_names,
+                child_expert_data,
+                expert_idx
+            )
+
+    def _create_matrix_input_ui(
+            self,
+            layout: QGridLayout,
+            labels: list[str],
+            size: int
+    ) -> list[list]:
+        """Создать UI для матрицы парных сравнений"""
+        alignment = Qt.AlignmentFlag.AlignHCenter
+
+        # Заголовки
+        for i in range(size):
+            layout.addWidget(QLabel(labels[i]), i + 1, 0, alignment=alignment)
+            layout.addWidget(QLabel(labels[i]), 0, i + 1, alignment=alignment)
+
+        # Поля ввода
+        matrix_inputs = []
+        for i in range(size):
+            row_inputs = []
+            for j in range(size):
+                if i == j:
+                    label = QLabel("1")
+                    layout.addWidget(label, i + 1, j + 1, alignment=alignment)
+                    row_inputs.append(None)
+                elif i < j:
+                    input_layout = QHBoxLayout()
+                    numerator = QLineEdit()
+                    numerator.setPlaceholderText("1")
+                    numerator.setText("1")
+                    numerator.setFixedWidth(30)
+                    denominator = QLineEdit()
+                    denominator.setPlaceholderText("1")
+                    denominator.setText("1")
+                    denominator.setFixedWidth(30)
+                    slash_label = QLabel("/")
+                    input_layout.addStretch()
+                    input_layout.addWidget(numerator)
+                    input_layout.addWidget(slash_label)
+                    input_layout.addWidget(denominator)
+                    input_layout.addStretch()
+
+                    layout.addLayout(input_layout, i + 1, j + 1, alignment=alignment)
+                    row_inputs.append((numerator, denominator))
+                else:
+                    row_inputs.append(None)
+            matrix_inputs.append(row_inputs)
+
+        return matrix_inputs
 
     def get_expert_data(self, data):
         n_experts = data['num_experts']
-        n_criteria = data['num_criteria']
-        n_alternatives = data['num_alternatives']
-
-        all_criteria_matrices = []
-        all_alternatives_matrices = [[] for _ in range(n_criteria)]
+        criteria_tree = data['criteria_tree']
 
         for expert_idx in range(n_experts):
             expert_data = self.expert_data[expert_idx]
+            self._get_expert_data_from_node(expert_data, criteria_tree, expert_idx)
 
-            # Матрица критериев для текущего эксперта
-            criteria_matrix = self.build_matrix_from_inputs(
-                expert_data['criteria_matrix'], n_criteria
-            )
-            all_criteria_matrices.append(criteria_matrix)
-
-            # Матрицы альтернатив для текущего эксперта
-            for crit_idx in range(n_criteria):
-                alt_matrix = self.build_matrix_from_inputs(
-                    expert_data['alternatives_matrices'][crit_idx], n_alternatives
-                )
-                all_alternatives_matrices[crit_idx].append(alt_matrix)
-        return all_criteria_matrices, all_alternatives_matrices
+    def _get_expert_data_from_node(self, input_node, node, expert_idx):
+        node.matrices[expert_idx] = self.build_matrix_from_inputs(
+            input_node.matrix_inputs, len(input_node.matrix_inputs)
+        )
+        for i, child in enumerate(input_node.children):
+            self._get_expert_data_from_node(child, node.children[i], expert_idx)
 
     def display_results(self, result_text):
         self.results_text.setText(result_text)
@@ -482,13 +503,9 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.show_error(f"Не удалось получить оценки:\n{error_message}")
 
     def fill_matrices_with_llm_results(self, results):
-        """Заполнение матриц результатами LLM"""
-        if not self.data['expert_data']:
-            return
-
         # Заполняем матрицу критериев для первого эксперта
         print("fill criteria matrix")
-        expert_data = self.data['expert_data'][0]
+        expert_data = self.expert_data[0]
         criteria_matrix = results['criteria_matrix']
         self.fill_matrix_ui(expert_data['criteria_matrix'], criteria_matrix)
 

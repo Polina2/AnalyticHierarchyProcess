@@ -235,15 +235,10 @@ class ResultsFormatter:
         :param state: AHPState с вычисленными результатами
         :param file_path: путь к выходному файлу .xlsx
         """
-        excel_data = []
-
         # === 1. Заголовок ===
-        excel_data.append(["МЕТОД АНАЛИЗА ИЕРАРХИЙ — ПОЛНЫЙ ОТЧЁТ"])
-        excel_data.append([])
+        excel_data = [["МЕТОД АНАЛИЗА ИЕРАРХИЙ"], [], ["СТРУКТУРА ДЕРЕВА КРИТЕРИЕВ"], []]
 
         # === 2. Структура дерева ===
-        excel_data.append(["СТРУКТУРА ДЕРЕВА КРИТЕРИЕВ"])
-        excel_data.append([])
         tree_lines = ResultsFormatter._format_tree_structure(state.criteria_tree, 0).split('\n')
         for line in tree_lines:
             if line.strip():
@@ -262,8 +257,7 @@ class ResultsFormatter:
             ResultsFormatter._append_node_to_excel(
                 excel_data,
                 state.criteria_tree,
-                root_labels,
-                state.experts_count
+                root_labels
             )
             excel_data.append([])
             excel_data.append([])
@@ -336,7 +330,6 @@ class ResultsFormatter:
                 excel_data,
                 child,
                 labels,
-                experts_count,
                 indent
             )
 
@@ -357,7 +350,6 @@ class ResultsFormatter:
             excel_data: list,
             node: CriterionNode,
             labels: list[str],
-            experts_count: int,
             indent: str = ""
     ):
         """Добавляет данные одного узла (матрицы, веса, согласованность) в excel_data"""

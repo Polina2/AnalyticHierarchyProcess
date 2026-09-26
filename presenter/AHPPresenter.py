@@ -1,5 +1,4 @@
 from LLM_service.APILLMProvider import APILLMProvider
-from LLM_service.BaseLLMProvider import BaseLLMProvider
 from LLM_service.LocalLLMProvider import LocalLLMProvider
 from calculator.CalculatorFactory import CalculatorFactory
 from domain.AHPState import AHPState
@@ -54,8 +53,11 @@ class AHPPresenter:
         # get expert data from ui
         self.view.get_expert_data(self.state.to_data())
 
-        final_scores = self.calculator.apply(self.state)
-        self.state.final_scores = final_scores
+        try:
+            final_scores = self.calculator.apply(self.state)
+            self.state.final_scores = final_scores
+        except Exception as e:
+            self.view.show_error(str(e))
 
         result_text = ResultsFormatter.format_results(self.state)
         self.view.show_results(result_text)
@@ -64,7 +66,7 @@ class AHPPresenter:
         try:
             file_path = self.view.get_file_path_from_dialog()
             ResultsFormatter.export_to_excel(
-                self.state.to_data(), *self.state.to_results(), self.state.final_scores, file_path
+                self.state, file_path
             )
             self.view.show_success(f"Результаты экспортированы в файл:\n{file_path}")
         except Exception as e:

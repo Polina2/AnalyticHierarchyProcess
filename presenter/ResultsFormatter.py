@@ -5,13 +5,6 @@ from domain.AHPState import AHPState
 from domain.CriterionNode import CriterionNode
 
 
-def argsort(arr):
-    idxs = list(range(len(arr)))
-    zip_arr = list(zip(idxs, arr))
-    zip_arr.sort(key=lambda x: x[1], reverse=True)
-    return [x[0] for x in zip_arr]
-
-
 class ResultsFormatter:
     @staticmethod
     def format_results(state: AHPState) -> str:
@@ -233,58 +226,238 @@ class ResultsFormatter:
         return result + "\n"
 
     @staticmethod
-    def format_results1(data, criteria_matrix, alt_matrices, criteria_weights,
-                       alt_weights, crit_consistency, alt_consistency, final_scores):
-        result_text = "РЕЗУЛЬТАТЫ МЕТОДА АНАЛИЗА ИЕРАРХИЙ\n\n"
+    def export_to_excel(state: AHPState, file_path: str):
+        """
+        Экспортирует все результаты AHP в Excel.
+        Включает: структуру дерева, матрицы всех экспертов, агрегированные матрицы,
+        локальные и глобальные веса, согласованность, финальные оценки.
 
-        result_text += "АГРЕГИРОВАННАЯ МАТРИЦА КРИТЕРИЕВ:\n"
-        result_text += ResultsFormatter.matrix_to_string(criteria_matrix, data['criteria_names'])
-        result_text += f"\nВЕКТОР ВЕСОВ КРИТЕРИЕВ:\n"
-        for i, weight in enumerate(criteria_weights):
-            result_text += f"{data['criteria_names'][i]}: {weight:.4f}\n"
-        result_text += "\nИндекс согласованности:\n"
-        result_text += str(crit_consistency[0])
-        result_text += "\nОтношение согласованности:\n"
-        result_text += str(crit_consistency[1])
+        :param state: AHPState с вычисленными результатами
+        :param file_path: путь к выходному файлу .xlsx
+        """
+        excel_data = []
 
-        result_text += "\n" + "=" * 50 + "\n\n"
+        # === 1. Заголовок ===
+        excel_data.append(["МЕТОД АНАЛИЗА ИЕРАРХИЙ — ПОЛНЫЙ ОТЧЁТ"])
+        excel_data.append([])
 
-        result_text += "МАТРИЦЫ И ВЕСА АЛЬТЕРНАТИВ ПО КРИТЕРИЯМ:\n"
-        for crit_idx in range(len(alt_matrices)):
-            result_text += f"\nКритерий: {data['criteria_names'][crit_idx]}\n"
-            result_text += ResultsFormatter.matrix_to_string(alt_matrices[crit_idx], data['alternative_names'])
-            result_text += f"Веса альтернатив:\n"
-            for i, weight in enumerate(alt_weights[crit_idx]):
-                result_text += f"{data['alternative_names'][i]}: {weight:.4f}\n"
-            result_text += "\nИндекс согласованности:\n"
-            result_text += str(alt_consistency[crit_idx][0])
-            result_text += "\nОтношение согласованности:\n"
-            result_text += str(alt_consistency[crit_idx][1]) + "\n"
+        # === 2. Структура дерева ===
+        excel_data.append(["СТРУКТУРА ДЕРЕВА КРИТЕРИЕВ"])
+        excel_data.append([])
+        tree_lines = ResultsFormatter._format_tree_structure(state.criteria_tree, 0).split('\n')
+        for line in tree_lines:
+            if line.strip():
+                excel_data.append([line])
+        excel_data.append([])
+        excel_data.append([])
 
-        result_text += "\n" + "=" * 50 + "\n\n"
-        result_text += "ФИНАЛЬНЫЕ РЕЗУЛЬТАТЫ:\n"
+        # === 3. Рекурсивный обход дерева ===
+        alt_names = [alt.name for alt in state.alternatives]
 
-        # Сортируем альтернативы по убыванию итоговой оценки
-        sorted_indices = argsort(final_scores)
+        # 3.1. Корневой узел
+        if state.criteria_tree.children:
+            excel_data.append(["КОРНЕВОЙ УЗЕЛ (сравнение критериев верхнего уровня)"])
+            excel_data.append([])
+            root_labels = [c.name for c in state.criteria_tree.children]
+            ResultsFormatter._append_node_to_excel(
+                excel_data,
+                state.criteria_tree,
+                root_labels,
+                state.experts_count
+            )
+            excel_data.append([])
+            excel_data.append([])
 
-        for idx in sorted_indices:
-            result_text += f"{data['alternative_names'][idx]}: {final_scores[idx]:.4f}\n"
+        # 3.2. Потомки корня
+        ResultsFormatter._append_children_to_excel(
+            excel_data,
+            state.criteria_tree,
+            alt_names,
+            state.experts_count,
+            depth=0
+        )
 
-        return result_text
+        # === 4. Финальные оценки альтернатив ===
+        excel_data.append([])
+        excel_data.append(["ИТОГОВЫЕ РЕЗУЛЬТАТЫ"])
+        excel_data.append([])
+        excel_data.append(["Альтернатива", "Итоговый балл", "Ранг"])
+
+        final_scores = state.final_scores
+        sorted_indices = np.argsort(final_scores)[::-1]
+
+        for rank, idx in enumerate(sorted_indices, 1):
+            excel_data.append([
+                alt_names[idx],
+                f"{float(final_scores[idx]):.4f}",
+                str(rank)
+            ])
+
+        # === 5. Запись в Excel ===
+        # Находим максимальную ширину строки
+        max_len = max((len(row) for row in excel_data if isinstance(row, list)), default=1)
+
+        flat_data = []
+        for item in excel_data:
+            if isinstance(item, list):
+                # Дополняем строку до максимальной длины
+                padded = item + [""] * (max_len - len(item))
+                # Заменяем точки на запятые для Excel
+                padded = [str(x).replace('.', ',') if x != "" else "" for x in padded]
+                flat_data.append(padded)
+            else:
+                flat_data.append([str(item).replace('.', ',')] + [""] * (max_len - 1))
+
+        df = pd.DataFrame(flat_data)
+        df.to_excel(file_path, index=False, header=False)
 
     @staticmethod
-    def matrix_to_string1(matrix, labels):
+    def _append_children_to_excel(
+            excel_data: list,
+            node: CriterionNode,
+            alt_names: list[str],
+            experts_count: int,
+            depth: int
+    ):
+        """Рекурсивно добавляет данные потомков узла в excel_data"""
+        indent = "  " * depth
+
+        for child in node.children:
+            if child.is_leaf():
+                labels = alt_names
+                excel_data.append([f"{indent}КРИТЕРИЙ (ЛИСТ): {child.name}"])
+            else:
+                labels = [c.name for c in child.children]
+                excel_data.append([f"{indent}КРИТЕРИЙ: {child.name}"])
+
+            excel_data.append([])
+
+            ResultsFormatter._append_node_to_excel(
+                excel_data,
+                child,
+                labels,
+                experts_count,
+                indent
+            )
+
+            excel_data.append([])
+
+            # Рекурсия для потомков
+            if not child.is_leaf():
+                ResultsFormatter._append_children_to_excel(
+                    excel_data,
+                    child,
+                    alt_names,
+                    experts_count,
+                    depth + 1
+                )
+
+    @staticmethod
+    def _append_node_to_excel(
+            excel_data: list,
+            node: CriterionNode,
+            labels: list[str],
+            experts_count: int,
+            indent: str = ""
+    ):
+        """Добавляет данные одного узла (матрицы, веса, согласованность) в excel_data"""
+
+        # === Матрицы парных сравнений всех экспертов ===
+        for key, matrix in node.matrices.items():
+            if key == 'aggregated_matrix':
+                continue  # Агрегированную выведем отдельно
+
+            # key — это ID эксперта (int)
+            if isinstance(key, int):
+                excel_data.append([f"{indent}Матрица эксперта {key + 1}:"])
+            else:
+                excel_data.append([f"{indent}Матрица (ключ: {key}):"])
+
+            ResultsFormatter._append_matrix_to_excel(excel_data, matrix, labels, indent + "  ")
+            excel_data.append([])
+
+        # === Агрегированная матрица ===
+        if 'aggregated_matrix' in node.matrices:
+            excel_data.append([f"{indent}Агрегированная матрица парных сравнений:"])
+            matrix = node.matrices['aggregated_matrix']
+            ResultsFormatter._append_matrix_to_excel(excel_data, matrix, labels, indent + "  ")
+            excel_data.append([])
+
+        # === Локальные веса ===
+        if node.weights is not None:
+            excel_data.append([f"{indent}Локальные веса:"])
+            excel_data.append([f"{indent}  Элемент", f"{indent}Вес"])
+            for i, weight in enumerate(node.weights):
+                excel_data.append([f"{indent}  {labels[i]}", f"{float(weight):.4f}"])
+            excel_data.append([])
+
+        # === Глобальные веса ===
+        if node.global_weights is not None:
+            excel_data.append([f"{indent}Глобальные веса:"])
+            excel_data.append([f"{indent}  Элемент", f"{indent}Вес"])
+            for i, weight in enumerate(node.global_weights):
+                excel_data.append([f"{indent}  {labels[i]}", f"{float(weight):.4f}"])
+            excel_data.append([])
+
+        # === Согласованность ===
+        if node.consistency:
+            excel_data.append([f"{indent}Согласованность:"])
+            for key, metrics in node.consistency.items():
+                if isinstance(key, int):
+                    key_label = f"Эксперт {key + 1}"
+                elif key == 'aggregated_matrix':
+                    key_label = 'Агрегированная матрица'
+                else:
+                    key_label = str(key)
+
+                if isinstance(metrics, dict):
+                    ci = metrics.get('index', None)
+                    cr = metrics.get('relation', None)
+
+                    row = [f"{indent}  {key_label}:"]
+                    if ci is not None:
+                        row.append(f"Индекс: {float(ci):.4f}")
+                    if cr is not None:
+                        row.append(f"Отношение: {float(cr) * 100:.2f}%")
+                    excel_data.append(row)
+
+                    # Дополнительные метрики
+                    for mk, mv in metrics.items():
+                        if mk not in ('index', 'relation'):
+                            if isinstance(mv, (int, float, np.floating)):
+                                excel_data.append([f"{indent}    {mk}", f"{float(mv):.4f}"])
+                            else:
+                                excel_data.append([f"{indent}    {mk}", str(mv)])
+                else:
+                    if isinstance(metrics, (int, float, np.floating)):
+                        excel_data.append([f"{indent}  {key_label}", f"{float(metrics):.4f}"])
+                    else:
+                        excel_data.append([f"{indent}  {key_label}", str(metrics)])
+
+    @staticmethod
+    def _append_matrix_to_excel(
+            excel_data: list,
+            matrix,
+            labels: list[str],
+            indent: str = ""
+    ):
+        """Добавляет матрицу в excel_data в табличном виде"""
         n = len(labels)
-        result = f"{' ':<30}" + "".join([f"{label:<15}" for label in labels]) + "\n"
+
+        # Заголовки столбцов
+        header = [f"{indent}"] + labels
+        excel_data.append(header)
+
+        # Строки матрицы
         for i in range(n):
-            result += f"{labels[i]:<20}"
+            row = [f"{indent}{labels[i]}"]
             for j in range(n):
-                result += f"{f"{matrix[i, j]:12.4f}":<20}"
-            result += "\n"
-        return result + "\n"
+                value = float(matrix[i, j]) if isinstance(matrix, np.ndarray) else matrix[i][j]
+                row.append(f"{value:.4f}")
+            excel_data.append(row)
 
     @staticmethod
-    def export_to_excel(data, criteria_matrix, alt_matrices, criteria_weights, alt_weights,
+    def export_to_excel1(data, criteria_matrix, alt_matrices, criteria_weights, alt_weights,
                         crit_consistency, alt_consistency, final_scores, file_path):
         # Создаем список данных для Excel
         excel_data = ["АГРЕГИРОВАННАЯ МАТРИЦА КРИТЕРИЕВ", ""]
@@ -360,7 +533,7 @@ class ResultsFormatter:
         excel_data.append(["Альтернатива", "Итоговый балл", "Ранг"])
 
         # Сортируем по убыванию итогового балла
-        sorted_indices = argsort(final_scores)
+        sorted_indices = np.argsort(final_scores)
         for rank, idx in enumerate(sorted_indices, 1):
             excel_data.append([
                 data['alternative_names'][idx],

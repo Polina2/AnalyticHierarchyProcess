@@ -31,21 +31,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     def show_results(self, results_text: str):
         self.results_text.setText(results_text)
 
-    def update_criteria_tree_ui(self, tree: CriterionNode):
-        pass
-
-    def update_expert_ui(self, expert_id: int, total: int):
-        pass
-
-    def update_matrices_ui(self, node: CriterionNode, expert_id: int):
-        pass
-
-    def get_current_expert_id(self) -> int:
-        pass
-
-    def get_genres_list(self) -> list[str]:
-        pass
-
     def __init__(self):
         super().__init__()
         self.init_ui()

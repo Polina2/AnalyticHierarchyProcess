@@ -18,31 +18,19 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
-    def update_criteria_tree_ui(self, tree: CriterionNode):
-        pass
-
-    @abstractmethod
-    def update_alternative_names_input(self, count):
-        pass
-
-    @abstractmethod
-    def update_expert_ui(self, expert_id: int, total: int):
-        pass
-
-    @abstractmethod
-    def update_matrices_ui(self, node: CriterionNode, expert_id: int):
-        pass
-
-    @abstractmethod
-    def get_current_expert_id(self) -> int:
-        pass
-
-    @abstractmethod
-    def get_genres_list(self) -> list[str]:
+    def update_alternative_names_input(self, count: int):
         pass
 
     @abstractmethod
     def get_file_path_from_dialog(self) -> str | None:
+        pass
+
+    @abstractmethod
+    def setup_expert_data_input(self, data: dict):
+        pass
+
+    @abstractmethod
+    def get_expert_data(self, data: dict):
         pass
 
     @abstractmethod

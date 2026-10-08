@@ -48,3 +48,11 @@ class IAHPView(ABC):
     @abstractmethod
     def on_llm_error(self, error_message):
         pass
+
+    @abstractmethod
+    def update_llm_tab(self, data):
+        pass
+
+    @abstractmethod
+    def get_alternative_descriptions(self):
+        pass

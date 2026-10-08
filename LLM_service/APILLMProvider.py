@@ -3,10 +3,11 @@ from huggingface_hub import InferenceClient
 from os import environ
 
 from LLM_service.BaseLLMProvider import BaseLLMProvider
+from domain.CriterionNode import CriterionNode
 
 
 class APILLMProvider(BaseLLMProvider):
-    finished = pyqtSignal(dict)
+    finished = pyqtSignal(CriterionNode)
     error = pyqtSignal(str)
 
     def __init__(self, model_path, prompt_generator, state):
@@ -15,8 +16,7 @@ class APILLMProvider(BaseLLMProvider):
         self.prompt_generator = prompt_generator
         self.client = None
         self.state = state
-        # self.paths1 = ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-20b', 'meta-llama/Llama-3.3-70B-Instruct', 'openai/gpt-oss-20b']
-        self.paths = ['Qwen/Qwen3-235B-A22B-Instruct-2507', 'Qwen/Qwen2.5-32B-Instruct', 'Qwen/Qwen3-32B', 'Qwen/Qwen3.5-27B', 'Qwen/Qwen3-8B']# 'Qwen/Qwen3-Coder-480B-A35B-Instruct'
+        self.paths = ['Qwen/Qwen3-235B-A22B-Instruct-2507', 'Qwen/Qwen2.5-32B-Instruct', 'Qwen/Qwen3-32B', 'Qwen/Qwen3.5-27B', 'Qwen/Qwen3-8B']
         self.providers = ['together', 'featherless-ai', 'ovhcloud', 'novita', 'fireworks-ai']
         self.i = 0
 
@@ -25,24 +25,10 @@ class APILLMProvider(BaseLLMProvider):
             model=self.model_path,
             token=environ['TOKEN']
         )
-        results = {
-            'criteria_matrix': self.generate_criteria_matrix(),
-            'alternative_matrices': []
-        }
-        print("criteria generated")
-        alternative_descriptions = [alt.description for alt in self.state.alternatives]
-        if not alternative_descriptions:
-            alternative_descriptions = self.get_alt_descriptions_without_prompt()
-        self.prompt_generator.add_desc_to_basic_prompt(alternative_descriptions)
-        criteria_names = [crit.name for crit in self.state.criteria_tree.children]
-        for crit_name in criteria_names:
-            matrix = self.generate_alternative_matrix(crit_name)
-            results['alternative_matrices'].append(matrix)
-            print("alternative generated")
-        self.finished.emit(results)
 
-    def get_alt_descriptions_without_prompt(self):
-        return open('../static/translations_short.txt', 'r', encoding='utf8').read()
+        tree = self.state.criteria_tree
+        self.generate_matrices(tree, 0)
+        self.finished.emit(tree)
 
     def get_alt_descriptions(self, criteria_names, alternative_descriptions_file):
         prompt = self.prompt_generator.get_alt_description_prompt(
@@ -51,14 +37,17 @@ class APILLMProvider(BaseLLMProvider):
         res = self.call_model(prompt)
         return res
 
-    def generate_criteria_matrix(self):
-        super().generate_criteria_matrix()
+    def generate_matrices(self, node, expert_idx):
+        super().generate_matrices(node, expert_idx)
+
+    def generate_criteria_matrix(self, names):
+        return super().generate_criteria_matrix(names)
 
     def generate_alternative_matrix(self, criterion):
-        super().generate_alternative_matrix(criterion)
+        return super().generate_alternative_matrix(criterion)
 
     def call_model(self, prompt):
-        print(f'basic_prompt: {self.prompt_generator.get_basic_prompt()}\nprompt{prompt}')
+        print(f'prompt {prompt}')
         messages = [
             {
                 "role": "system",

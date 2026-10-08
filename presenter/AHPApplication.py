@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
                              QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox, QTreeWidget, QHeaderView,
-                             QTreeWidgetItem)
+                             QTreeWidgetItem, QPlainTextEdit)
 from PyQt6.QtCore import Qt, pyqtSignal
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
@@ -73,10 +73,9 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.model_path_edit = QComboBox()
         self.model_path_edit.addItem("./models/qwen2.5")
         self.model_path_edit.addItem("./models/qwen2.5-1.5b")
-        self.model_path_edit.addItem("Qwen/Qwen2.5-7B-Instruct")
-        self.model_path_edit.addItem("Qwen/Qwen2.5-32B-Instruct:featherless-ai")
-        self.model_path_edit.addItem("Qwen/Qwen3.6-35B-A3B:featherless-ai")
-        self.model_path_edit.addItem("Qwen/Qwen3-235B-A22B-Instruct-2507:scaleway")
+        self.model_path_edit.addItem("Qwen/Qwen3.8-2.4T-A95B:novita")
+        self.model_path_edit.addItem("Qwen/Qwen3.6-35B-A3B")
+        self.model_path_edit.addItem("Qwen/Qwen3-Next-80B-A3B-Instruct:novita")
         model_layout.addWidget(self.model_path_edit)
 
         layout.addWidget(model_group)
@@ -85,9 +84,10 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         prompt_group = QGroupBox("Промпты")
         self.prompt_layout = QVBoxLayout(prompt_group)
 
-        self.prompt_layout.addWidget(QLabel("Файл с текстами:"))
-        self.alt_file = QLineEdit()
-        self.prompt_layout.addWidget(self.alt_file)
+        self.prompt_layout.addWidget(QLabel("Исходный текст:"))
+        self.orig_text = QPlainTextEdit()
+        self.orig_text.setMaximumHeight(200)
+        self.prompt_layout.addWidget(self.orig_text)
 
         layout.addWidget(prompt_group)
 
@@ -103,6 +103,18 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
         # Добавляем вкладку после "Основные параметры"
         self.tab_widget.insertTab(1, llm_tab, "Настройки LLM")
+
+    def get_original_text(self):
+        return self.orig_text.toPlainText()
+
+    def update_llm_tab(self, data):
+        self.alternative_description_inputs = {}
+        for i in range(data['num_alternatives']):
+            self.prompt_layout.addWidget(QLabel(data['alternative_names'][i]+':'))
+            alt_text = QPlainTextEdit()
+            alt_text.setMaximumHeight(200)
+            self.prompt_layout.addWidget(alt_text)
+            self.alternative_description_inputs[data['alternative_names'][i]] = alt_text
 
     @staticmethod
     def build_matrix_from_inputs(input_matrix, size):
@@ -258,6 +270,12 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 for j in reversed(range(layout.count())):
                     layout.itemAt(j).widget().deleteLater()
                 layout.deleteLater()
+
+    def get_alternative_descriptions(self):
+        descriptions = {}
+        for key in self.alternative_description_inputs:
+            descriptions[key] = self.alternative_description_inputs[key].toPlainText()
+        return descriptions
 
     def get_parameters(self):
         # Сохраняем основные параметры
@@ -487,21 +505,42 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.generate_btn.setEnabled(True)
         self.show_error(f"Не удалось получить оценки:\n{error_message}")
 
-    def fill_matrices_with_llm_results(self, results):
-        # Заполняем матрицу критериев для первого эксперта
-        print("fill criteria matrix")
-        expert_data = self.expert_data[0]
-        criteria_matrix = results['criteria_matrix']
-        self.fill_matrix_ui(expert_data['criteria_matrix'], criteria_matrix)
+    def fill_matrices_with_llm_results(self, results_tree: CriterionNode):
+        """
+        Заполняет матрицы в UI результатами LLM для всех экспертов.
 
-        # Заполняем матрицы альтернатив
-        print("fill alternatives matrices")
-        for crit_idx, alt_matrix in enumerate(results['alternative_matrices']):
-            if crit_idx < len(expert_data['alternatives_matrices']):
-                self.fill_matrix_ui(
-                    expert_data['alternatives_matrices'][crit_idx],
-                    alt_matrix
-                )
+        :param results_tree: дерево CriterionNode, где в каждом узле в matrices
+                             хранятся матрицы всех экспертов {expert_id: matrix}
+        """
+        if not self.expert_data:
+            return
+
+        print("fill matrices with LLM results")
+
+        # Заполняем матрицы для каждого эксперта
+        for expert_idx, expert_data in enumerate(self.expert_data):
+            self._fill_expert_matrices(expert_data, results_tree, expert_idx)
+
+    def _fill_expert_matrices(self, ui_node: 'ExpertDataInputNode',
+                              result_node: 'CriterionNode',
+                              expert_id: int):
+        """
+        Рекурсивно заполняет матрицы для одного эксперта.
+
+        :param ui_node: узел дерева UI (ExpertDataInputNode)
+        :param result_node: узел дерева результатов (CriterionNode)
+        :param expert_id: ID эксперта
+        """
+        # Находим соответствующий узел в результатах по имени
+        if ui_node.name == result_node.name:
+            # Заполняем матрицу текущего узла
+            if ui_node.matrix_inputs is not None and expert_id in result_node.matrices:
+                matrix = result_node.matrices[expert_id]
+                self.fill_matrix_ui(ui_node.matrix_inputs, matrix)
+
+            # Рекурсивно обрабатываем потомков
+            for ui_child, result_child in zip(ui_node.children, result_node.children):
+                self._fill_expert_matrices(ui_child, result_child, expert_id)
 
     def fill_matrix_ui(self, ui_matrix, values_matrix):
         """Заполнение UI матрицы значениями"""

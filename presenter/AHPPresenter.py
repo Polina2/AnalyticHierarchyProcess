@@ -27,6 +27,7 @@ class AHPPresenter:
 
     def on_generate_clicked(self):
         prompt_generator = LingScalePromptGenerator()
+        self._save_alternative_descriptions(prompt_generator)
         model_path = self.view.get_model_path()
         if model_path[0] == '.' or model_path[1] == ':':
             self.llm_provider = LocalLLMProvider(
@@ -44,10 +45,23 @@ class AHPPresenter:
         self.llm_provider.error.connect(self.view.on_llm_error)
         self.llm_provider.start()
 
+    def _save_alternative_descriptions(self, prompt_generator):
+        alt_descriptions = self.view.get_alternative_descriptions()
+        orig_text = self.view.get_original_text()
+        for alt in self.state.alternatives:
+            alt.description = alt_descriptions[alt.name]
+        alt_descriptions_str = ''
+        for alt in self.state.alternatives:
+            alt_descriptions_str = '\n'.join([alt_descriptions_str, alt.name, alt.description])
+        if not alt_descriptions_str:
+            alt_descriptions_str = open('../static/translations_short.txt', 'r', encoding='utf8').read()
+        prompt_generator.add_desc_to_basic_prompt(alt_descriptions_str, orig_text)
+
     def on_confirm_parameters_clicked(self):
         data = self.view.get_parameters()
         self.state.from_data(data)
         self.view.setup_expert_data_input(data)
+        self.view.update_llm_tab(data)
 
     def on_calculate_results_clicked(self):
         # get expert data from ui

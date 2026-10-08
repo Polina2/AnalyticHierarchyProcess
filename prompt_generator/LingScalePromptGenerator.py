@@ -31,5 +31,6 @@ class LingScalePromptGenerator(PromptGenerator):
             Верни ответ в виде: Название альтернативы. Описание альтернативы.
             {open(file, 'r', encoding='utf8').read()}"""
 
-    def add_desc_to_basic_prompt(self, desc):
-        self.basic_prompt = self.basic_prompt + '\nОписание альтернатив:\n' + desc
+    def add_desc_to_basic_prompt(self, desc, orig_text=None):
+        orig_text_to_add = ('Оригинальный текст:\n' + orig_text + '\n') if orig_text else ''
+        self.basic_prompt = self.basic_prompt + '\nОписание альтернатив:\n' + orig_text_to_add + desc

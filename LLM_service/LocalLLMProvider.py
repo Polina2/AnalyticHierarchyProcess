@@ -2,6 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging
 from PyQt6.QtCore import pyqtSignal
 from LLM_service.BaseLLMProvider import BaseLLMProvider
+from domain.CriterionNode import CriterionNode
 
 
 def _replace_fractions(s):
@@ -20,9 +21,8 @@ def _replace_fractions(s):
     return ''.join(new_str)
 
 
-
 class LocalLLMProvider(BaseLLMProvider):
-    finished = pyqtSignal(dict)
+    finished = pyqtSignal(CriterionNode)
     error = pyqtSignal(str)
 
     def __init__(self, model_path, prompt_generator, state):
@@ -61,38 +61,25 @@ class LocalLLMProvider(BaseLLMProvider):
                 # quantization_config=quantization_config
             )
 
-            print("model loaded")
-
-            print("generate matrices")
-            # Генерируем матрицы
-            results = {
-                'criteria_matrix': self.generate_criteria_matrix(),
-                'alternative_matrices': []
-            }
-            print("criteria generated")
-            print(results['criteria_matrix'])
-            # Генерируем матрицы для альтернатив по каждому критерию
-            criteria_names = [crit.name for crit in self.state.criteria_tree.children]
-            for crit_name in criteria_names:
-                matrix = self.generate_alternative_matrix(crit_name)
-                results['alternative_matrices'].append(matrix)
-                print("alternative generated")
-
-            print("signal emit")
-            self.finished.emit(results)
-            print("signal emitted")
+            tree = self.state.criteria_tree
+            self.generate_matrices(tree, 0)
+            self.finished.emit(tree)
 
         except Exception as e:
             self.error.emit(str(e))
 
-    def generate_criteria_matrix(self):
-        super().generate_criteria_matrix()
+    def generate_matrices(self, node, expert_idx):
+        super().generate_matrices(node, expert_idx)
+
+    def generate_criteria_matrix(self, names):
+        return super().generate_criteria_matrix(names)
 
     def generate_alternative_matrix(self, criterion):
-        super().generate_alternative_matrix(criterion)
+        return super().generate_alternative_matrix(criterion)
 
     def call_model(self, prompt):
         """Вызов модели"""
+        prompt = '\n'.join([self.prompt_generator.get_basic_prompt(), prompt])
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
         print("got input, call model")

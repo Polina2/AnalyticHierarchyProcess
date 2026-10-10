@@ -2,6 +2,7 @@ from LLM_service.APILLMProvider import APILLMProvider
 from LLM_service.LocalLLMProvider import LocalLLMProvider
 from calculator.CalculatorFactory import CalculatorFactory
 from domain.AHPState import AHPState
+from domain.StateRepository import StateRepository
 from presenter.IAHPView import IAHPView
 from presenter.ResultsFormatter import ResultsFormatter
 from prompt_generator.LingScalePromptGenerator import LingScalePromptGenerator
@@ -15,6 +16,7 @@ class AHPPresenter:
         self.view = view
         self.state = state
         self.calculator = calculator_factory.create('crisp')
+        self.repository = StateRepository()
         self.llm_provider = None
         self._connect_signals()
 
@@ -24,6 +26,34 @@ class AHPPresenter:
         self.view.confirm_parameters_clicked.connect(self.on_confirm_parameters_clicked)
         self.view.calculate_results_clicked.connect(self.on_calculate_results_clicked)
         self.view.export_clicked.connect(self.on_export_clicked)
+        self.view.save_state_clicked.connect(self.on_save_state)
+        self.view.load_state_clicked.connect(self.on_load_state)
+
+    def on_save_state(self, file_path: str):
+        """Обработчик сохранения."""
+        try:
+            self.view.get_expert_data(self.state.to_data())
+
+            self.repository.save(self.state, file_path)
+            self.view.show_success("Прогресс успешно сохранен!")
+        except Exception as e:
+            self.view.show_error(f"Ошибка при сохранении:\n{str(e)}")
+
+    def on_load_state(self, file_path: str):
+        """Обработчик загрузки."""
+        try:
+            # Загружаем состояние из файла
+            loaded_state = self.repository.load(file_path)
+
+            # Заменяем текущее состояние на загруженное
+            self.state = loaded_state
+
+            # Перестраиваем UI на основе нового состояния
+            self.view.rebuild_ui_from_state(self.state)
+
+            self.view.show_success("Прогресс успешно загружен!")
+        except Exception as e:
+            self.view.show_error(f"Ошибка при загрузке:\n{str(e)}")
 
     def on_generate_clicked(self):
         prompt_generator = LingScalePromptGenerator()

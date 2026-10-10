@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox, QTreeWidget, QHeaderView,
                              QTreeWidgetItem, QPlainTextEdit)
 from PyQt6.QtCore import Qt, pyqtSignal
+
+from domain.AHPState import AHPState
 from domain.CriterionNode import CriterionNode
 from presenter.IAHPView import IAHPView
 
@@ -21,6 +23,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     confirm_parameters_clicked = pyqtSignal()
     calculate_results_clicked = pyqtSignal()
     export_clicked = pyqtSignal()
+    save_state_clicked = pyqtSignal(str)  # file_path
+    load_state_clicked = pyqtSignal(str)  # file_path
 
     def show_error(self, message: str):
         QMessageBox.critical(self, "Ошибка", message)
@@ -43,6 +47,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.confirm_btn.clicked.connect(self.confirm_parameters_clicked)
         self.calculate_btn.clicked.connect(self.calculate_results_clicked)
         self.export_btn.clicked.connect(self.export_clicked)
+        self.save_btn.clicked.connect(self.on_save_btn_clicked)
+        self.load_btn.clicked.connect(self.on_load_btn_clicked)
 
     def init_ui(self):
         self.setWindowTitle('Метод анализа иерархий (AHP)')
@@ -59,6 +65,79 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.setup_expert_input_tab()
         self.setup_results_tab()
         self.setup_llm_tab()
+
+        self.save_btn = QPushButton("💾 Сохранить прогресс")
+        self.load_btn = QPushButton("📂 Загрузить прогресс")
+
+        layout.addWidget(self.save_btn)
+        layout.addWidget(self.load_btn)
+
+    def on_save_btn_clicked(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Сохранить прогресс", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if file_path:
+            self.save_state_clicked.emit(file_path)
+
+    def on_load_btn_clicked(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Загрузить прогресс", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if file_path:
+            self.load_state_clicked.emit(file_path)
+
+    def rebuild_ui_from_state(self, state: AHPState):
+        """Полностью перестраивает UI на основе загруженного состояния."""
+        # 1. Обновляем спинбоксы
+        self.alternatives_spin.setValue(len(state.alternatives))
+        self.experts_spin.setValue(state.experts_count)
+
+        # 2. Перестраиваем дерево критериев
+        self.update_criteria_tree_ui(state.criteria_tree)
+
+        # 3. Обновляем названия альтернатив
+        self.update_alternative_names_input(len(state.alternatives))
+        # Заполняем их названиями из state
+        for i, alt in enumerate(state.alternatives):
+            layout = self.alternatives_names_layout.itemAt(i)
+            if layout:
+                line_edit = layout.itemAt(1).widget()
+                line_edit.setText(alt.name)
+
+        # 4. Перестраиваем вкладки экспертов с матрицами
+        self.setup_expert_data_input(state.to_data())
+        self.fill_matrices_with_llm_results(state.criteria_tree)
+
+        # 5. Переключаемся на вкладку экспертов
+        self.tab_widget.setCurrentIndex(2)
+
+    def update_criteria_tree_ui(self, tree: CriterionNode):
+        # Очищаем текущее дерево
+        self.criteria_tree_widget.clear()
+
+        # Рекурсивно заполняем дерево из модели
+        root_item = self.criteria_tree_widget.invisibleRootItem()
+        for child_node in tree.children:
+            self._add_tree_item_from_node(root_item, child_node)
+
+        # Разворачиваем все узлы
+        self.criteria_tree_widget.expandAll()
+
+    def _add_tree_item_from_node(self, parent_item: QTreeWidgetItem, node: CriterionNode):
+        item = QTreeWidgetItem(parent_item)
+        item.setText(0, "")
+
+        # Используем существующий метод для добавления контролов
+        self._add_tree_item_controls(item)
+
+        # Заполняем имя из модели
+        name_edit = self.criteria_tree_widget.itemWidget(item, 0)
+        if name_edit and isinstance(name_edit, QLineEdit):
+            name_edit.setText(node.name)
+
+        # Рекурсивно добавляем потомков
+        for child_node in node.children:
+            self._add_tree_item_from_node(item, child_node)
 
     def setup_llm_tab(self):
         """Создаем вкладку настроек LLM"""
@@ -177,7 +256,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         btn_layout.addWidget(self.add_root_criterion_btn)
         btn_layout.addStretch()
         self.criteria_names_layout.addLayout(btn_layout)
-        # self._on_add_root_criterion()
 
         layout.addWidget(self.criteria_names_group)
 
@@ -197,7 +275,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         item = QTreeWidgetItem(self.criteria_tree_widget.invisibleRootItem())
         item.setText(0, "")
         self._add_tree_item_controls(item)
-        # self._add_tree_item_button(item)
 
     def _add_tree_item_controls(self, item: QTreeWidgetItem):
         """Добавить кнопки управления к элементу дерева"""
@@ -514,8 +591,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         """
         if not self.expert_data:
             return
-
-        print("fill matrices with LLM results")
 
         # Заполняем матрицы для каждого эксперта
         for expert_idx, expert_data in enumerate(self.expert_data):

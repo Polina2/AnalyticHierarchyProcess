@@ -56,3 +56,7 @@ class IAHPView(ABC):
     @abstractmethod
     def get_alternative_descriptions(self):
         pass
+
+    @abstractmethod
+    def rebuild_ui_from_state(self, state):
+        pass

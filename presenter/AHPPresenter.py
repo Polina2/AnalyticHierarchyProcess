@@ -5,6 +5,7 @@ from domain.AHPState import AHPState
 from domain.StateRepository import StateRepository
 from presenter.IAHPView import IAHPView
 from presenter.ResultsFormatter import ResultsFormatter
+from preset.CriteriaPresetManager import CriteriaPresetManager
 from prompt_generator.LingScalePromptGenerator import LingScalePromptGenerator
 
 
@@ -17,8 +18,10 @@ class AHPPresenter:
         self.state = state
         self.calculator = calculator_factory.create('crisp')
         self.repository = StateRepository()
+        self.preset_manager = CriteriaPresetManager()
         self.llm_provider = None
         self._connect_signals()
+        self._refresh_presets_ui()
 
     def _connect_signals(self):
         self.view.generate_clicked.connect(self.on_generate_clicked)
@@ -28,6 +31,28 @@ class AHPPresenter:
         self.view.export_clicked.connect(self.on_export_clicked)
         self.view.save_state_clicked.connect(self.on_save_state)
         self.view.load_state_clicked.connect(self.on_load_state)
+        self.view.preset_load_requested.connect(self.on_preset_load)
+
+    def _refresh_presets_ui(self, selected: str = None):
+        presets = self.preset_manager.get_all_presets()
+        self.view.refresh_presets_list(presets, selected)
+
+    def on_preset_load(self, name: str):
+        """Загрузка встроенного пресета."""
+        try:
+            json_str = self.preset_manager.load_preset(name)
+            loaded_state = AHPState.from_json(json_str)
+
+            # Подменяем состояние
+            self.state = loaded_state
+            self.state.genre_preset = name
+
+            # Перестраиваем UI
+            self.view.rebuild_ui_from_state(self.state)
+            self._refresh_presets_ui(selected=name)
+            self.view.show_success(f"Пресет '{name}' загружен")
+        except Exception as e:
+            self.view.show_error(f"Ошибка загрузки пресета:\n{e}")
 
     def on_save_state(self, file_path: str):
         """Обработчик сохранения."""

@@ -60,3 +60,7 @@ class IAHPView(ABC):
     @abstractmethod
     def rebuild_ui_from_state(self, state):
         pass
+
+    @abstractmethod
+    def refresh_presets_list(self, presets: list, selected_genre: str = None):
+        pass

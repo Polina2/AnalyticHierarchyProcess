@@ -1,0 +1,310 @@
+{
+  "criteria_tree": {
+    "name": "Root",
+    "children": [
+      {
+        "name": "Смысловое содержание текста",
+        "children": [
+          {
+            "name": "Предметно-логическая информация",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          },
+          {
+            "name": "Позиция автора",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          }
+        ],
+        "matrices": {
+          "0": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        },
+        "weights": null,
+        "global_weights": null,
+        "consistency": {}
+      },
+      {
+        "name": "Нормативность переводящего языка",
+        "children": [
+          {
+            "name": "Лексическая сочетаемость",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          },
+          {
+            "name": "Грамматическая норма",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          },
+          {
+            "name": "Стилистическая норма",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          },
+          {
+            "name": "Пунктуация",
+            "children": [],
+            "matrices": {
+              "0": [
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              ]
+            },
+            "weights": null,
+            "global_weights": null,
+            "consistency": {}
+          }
+        ],
+        "matrices": {
+          "0": [
+            [
+              1.0,
+              3.0,
+              0.5,
+              9.0
+            ],
+            [
+              0.3333333333333333,
+              1.0,
+              0.3333333333333333,
+              4.0
+            ],
+            [
+              2.0,
+              3.0,
+              1.0,
+              8.0
+            ],
+            [
+              0.1111111111111111,
+              0.25,
+              0.125,
+              1.0
+            ]
+          ]
+        },
+        "weights": null,
+        "global_weights": null,
+        "consistency": {}
+      }
+    ],
+    "matrices": {
+      "0": [
+        [
+          1.0,
+          2.0
+        ],
+        [
+          0.5,
+          1.0
+        ]
+      ]
+    },
+    "weights": null,
+    "global_weights": null,
+    "consistency": {}
+  },
+  "alternatives": [
+    {
+      "name": "Альтернатива 1",
+      "description": null
+    },
+    {
+      "name": "Альтернатива 2",
+      "description": null
+    },
+    {
+      "name": "Альтернатива 3",
+      "description": null
+    },
+    {
+      "name": "Альтернатива 4",
+      "description": null
+    }
+  ],
+  "experts_count": 1,
+  "current_expert_id": 0,
+  "genre_preset": "",
+  "method_type": "crisp"
+}

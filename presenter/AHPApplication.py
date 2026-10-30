@@ -25,6 +25,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     export_clicked = pyqtSignal()
     save_state_clicked = pyqtSignal(str)  # file_path
     load_state_clicked = pyqtSignal(str)  # file_path
+    preset_load_requested = pyqtSignal(str)  # имя пресета
 
     def show_error(self, message: str):
         QMessageBox.critical(self, "Ошибка", message)
@@ -66,8 +67,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.setup_results_tab()
         self.setup_llm_tab()
 
-        self.save_btn = QPushButton("💾 Сохранить прогресс")
-        self.load_btn = QPushButton("📂 Загрузить прогресс")
+        self.save_btn = QPushButton("Сохранить прогресс")
+        self.load_btn = QPushButton("Загрузить прогресс")
 
         layout.addWidget(self.save_btn)
         layout.addWidget(self.load_btn)
@@ -268,7 +269,50 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.confirm_btn = QPushButton("Подтвердить параметры")
         layout.addWidget(self.confirm_btn)
 
+        # Пресеты
+        preset_group = QGroupBox("Загрузка предопределенного дерева критериев")
+        preset_layout = QHBoxLayout(preset_group)
+
+        preset_layout.addWidget(QLabel("Стиль:"))
+
+        self.genre_combo = QComboBox()
+        self.genre_combo.setMinimumWidth(250)
+        preset_layout.addWidget(self.genre_combo)
+
+        self.load_preset_btn = QPushButton("Загрузить")
+        self.load_preset_btn.clicked.connect(self._on_load_preset_clicked)
+        preset_layout.addWidget(self.load_preset_btn)
+
+        preset_layout.addStretch()
+        layout.addWidget(preset_group)
+
         self.tab_widget.addTab(tab, "Основные параметры")
+
+    def _on_load_preset_clicked(self):
+        name = self.genre_combo.currentData()
+        if not name:
+            self.show_error("Выберите стиль из списка")
+            return
+        self.preset_load_requested.emit(name)
+
+    def refresh_presets_list(self, presets: list, selected_genre: str = None):
+        """Обновляет ComboBox списком встроенных пресетов."""
+        self.genre_combo.blockSignals(True)
+        self.genre_combo.clear()
+        self.genre_combo.addItem("-- Выберите стиль --", None)
+
+        for preset in presets:
+            label = preset.name
+            if preset.description:
+                label = f"{preset.name} — {preset.description}"
+            self.genre_combo.addItem(label, preset.name)
+
+        if selected_genre:
+            idx = self.genre_combo.findData(selected_genre)
+            if idx >= 0:
+                self.genre_combo.setCurrentIndex(idx)
+
+        self.genre_combo.blockSignals(False)
 
     def _on_add_root_criterion(self):
         """Добавить корневой критерий"""

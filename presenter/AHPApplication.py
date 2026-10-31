@@ -262,7 +262,18 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
         # Ввод названий альтернатив
         self.alternatives_names_group = QGroupBox("Названия альтернатив")
-        self.alternatives_names_layout = QVBoxLayout(self.alternatives_names_group)
+        group_layout = QVBoxLayout(self.alternatives_names_group)
+
+        # Создаём прокручиваемую область
+        self.alt_scroll = QScrollArea()
+        self.alt_scroll.setWidgetResizable(True)
+        self.alt_scroll.setMaximumHeight(200)
+
+        # Контейнер для содержимого
+        self.alt_scroll_widget = QWidget()
+        self.alternatives_names_layout = QVBoxLayout(self.alt_scroll_widget)
+        self.alt_scroll.setWidget(self.alt_scroll_widget)
+        group_layout.addWidget(self.alt_scroll)
         layout.addWidget(self.alternatives_names_group)
 
         # Кнопка подтверждения

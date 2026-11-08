@@ -30,13 +30,6 @@ class APILLMProvider(BaseLLMProvider):
         self.generate_matrices(tree, 0)
         self.finished.emit(tree)
 
-    def get_alt_descriptions(self, criteria_names, alternative_descriptions_file):
-        prompt = self.prompt_generator.get_alt_description_prompt(
-            criteria_names, alternative_descriptions_file
-        )
-        res = self.call_model(prompt)
-        return res
-
     def generate_matrices(self, node, expert_idx):
         super().generate_matrices(node, expert_idx)
 

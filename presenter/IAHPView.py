@@ -64,3 +64,21 @@ class IAHPView(ABC):
     @abstractmethod
     def refresh_presets_list(self, presets: list, selected_genre: str = None):
         pass
+
+    @abstractmethod
+    def set_basic_prompt(self, text: str): ...
+
+    @abstractmethod
+    def update_alternatives_descriptions(self, alternatives: list): ...
+
+    @abstractmethod
+    def update_criteria_descriptions(self, tree: 'CriterionNode'): ...
+
+    @abstractmethod
+    def get_basic_prompt(self) -> str: ...
+
+    @abstractmethod
+    def get_alternatives_descriptions(self) -> dict: ...
+
+    @abstractmethod
+    def get_criteria_descriptions(self) -> dict: ...

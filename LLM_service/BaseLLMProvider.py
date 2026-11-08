@@ -39,7 +39,7 @@ class BaseLLMProvider(QThread):
                 prompt = self.prompt_generator.get_criteria_prompt(
                     criteria_names[i], criteria_names[j]
                 )
-                num = BaseLLMProvider.parse_response(self.call_model_stub(prompt))
+                num = BaseLLMProvider.parse_response(self.call_model(prompt))
                 matrix[i][j] = num
         return matrix
 
@@ -53,12 +53,9 @@ class BaseLLMProvider(QThread):
                 prompt = self.prompt_generator.get_alternative_prompt(
                     alternative_names[i], alternative_names[j], criterion
                 )
-                num = BaseLLMProvider.parse_response(self.call_model_stub(prompt))
+                num = BaseLLMProvider.parse_response(self.call_model(prompt))
                 matrix[i][j] = num
         return matrix
-
-    def call_model_stub(self, prompt):
-        return '1 - умеренное превосходство'
 
     @abstractmethod
     def call_model(self, prompt: str) -> str:
@@ -77,8 +74,7 @@ class BaseLLMProvider(QThread):
             'умеренное превосходство': 3,
             'сильное превосходство': 5,
             'очень сильное превосходство': 7,
-            'абсолютное превосходство': 9,
-            'один из вариантов': 2
+            'абсолютное превосходство': 9
         }
         alt, res = response.split(' - ')
         num_res = scale[res]

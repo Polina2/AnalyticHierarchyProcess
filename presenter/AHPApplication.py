@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTextEdit, QTabWidget,
                              QScrollArea, QGroupBox, QMessageBox, QFileDialog, QComboBox, QTreeWidget, QHeaderView,
-                             QTreeWidgetItem, QPlainTextEdit)
+                             QTreeWidgetItem, QPlainTextEdit, QFrame, QSizePolicy)
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from domain.AHPState import AHPState
@@ -18,7 +18,13 @@ class Meta(abc.ABCMeta, PyQt6.sip.wrappertype):
 
 
 class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
-    generate_clicked = pyqtSignal()
+    # generate_clicked = pyqtSignal()
+    generate_criteria_clicked = pyqtSignal()
+    generate_alternatives_clicked = pyqtSignal()
+    basic_prompt_changed = pyqtSignal(str)
+    alternative_description_changed = pyqtSignal(str, str)  # name, description
+    criterion_description_changed = pyqtSignal(str, str)  # name, description
+
     alternatives_changed = pyqtSignal(int)
     confirm_parameters_clicked = pyqtSignal()
     calculate_results_clicked = pyqtSignal()
@@ -43,7 +49,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self._connect_signals()
 
     def _connect_signals(self):
-        self.generate_btn.clicked.connect(self.generate_clicked)
+        # self.generate_btn.clicked.connect(self.generate_clicked)
         self.alternatives_spin.valueChanged.connect(self.alternatives_changed)
         self.confirm_btn.clicked.connect(self.confirm_parameters_clicked)
         self.calculate_btn.clicked.connect(self.calculate_results_clicked)
@@ -161,22 +167,90 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         layout.addWidget(model_group)
 
         # Промпты
-        prompt_group = QGroupBox("Промпты")
-        self.prompt_layout = QVBoxLayout(prompt_group)
+        prompt_group = QGroupBox("Базовый промпт")
+        prompt_layout = QVBoxLayout(prompt_group)
 
-        self.prompt_layout.addWidget(QLabel("Исходный текст:"))
-        self.orig_text = QPlainTextEdit()
-        self.orig_text.setMaximumHeight(200)
-        self.prompt_layout.addWidget(self.orig_text)
+        self.basic_prompt_edit = QPlainTextEdit()
+        self.basic_prompt_edit.setMaximumHeight(150)
+        # Сигнал при изменении текста
+        self.basic_prompt_edit.textChanged.connect(
+            lambda: self.basic_prompt_changed.emit(self.basic_prompt_edit.toPlainText())
+        )
+        prompt_layout.addWidget(self.basic_prompt_edit)
 
         layout.addWidget(prompt_group)
+
+        desc_group = QGroupBox("Описания альтернатив и критериев")
+        desc_outer_layout = QVBoxLayout(desc_group)
+
+        self.desc_scroll = QScrollArea()
+        self.desc_scroll.setWidgetResizable(True)
+        self.desc_scroll.setMaximumHeight(350)
+
+        # Контейнер для содержимого скролла
+        self.desc_scroll_widget = QWidget()
+        self.desc_main_layout = QVBoxLayout(self.desc_scroll_widget)
+        self.desc_main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # --- Секция альтернатив ---
+        alt_header = QLabel("<b>Альтернативы:</b>")
+        self.desc_main_layout.addWidget(alt_header)
+
+        self.alt_desc_container = QWidget()
+        self.alt_desc_layout = QVBoxLayout(self.alt_desc_container)
+        self.alt_desc_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.desc_main_layout.addWidget(self.alt_desc_container)
+
+        # Разделитель
+        self.desc_main_layout.addSpacing(15)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        self.desc_main_layout.addWidget(separator)
+        self.desc_main_layout.addSpacing(10)
+
+        # --- Секция критериев ---
+        crit_header = QLabel("<b>Критерии:</b>")
+        self.desc_main_layout.addWidget(crit_header)
+
+        self.criteria_desc_tree = QTreeWidget()
+        self.criteria_desc_tree.setHeaderLabels(["Критерий", "Описание"])
+        self.criteria_desc_tree.header().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.criteria_desc_tree.header().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        # Отключаем собственный скролл у QTreeWidget,
+        # чтобы прокрутка шла через внешний QScrollArea
+        self.criteria_desc_tree.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        # Высота подстраивается под содержимое
+        self.criteria_desc_tree.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        self.desc_main_layout.addWidget(self.criteria_desc_tree)
+
+        self.desc_main_layout.addStretch()
+
+        self.desc_scroll.setWidget(self.desc_scroll_widget)
+        desc_outer_layout.addWidget(self.desc_scroll)
+
+        layout.addWidget(desc_group)
 
         # Кнопки управления
         btn_layout = QHBoxLayout()
 
-        self.generate_btn = QPushButton("Получить оценки от модели")
-        self.generate_btn.setEnabled(False)
-        btn_layout.addWidget(self.generate_btn)
+        self.generate_criteria_btn = QPushButton("Получить оценки критериев от модели")
+        self.generate_criteria_btn.setEnabled(False)
+        self.generate_criteria_btn.clicked.connect(self.generate_criteria_clicked.emit)
+        btn_layout.addWidget(self.generate_criteria_btn)
+
+        self.generate_alternatives_btn = QPushButton("Получить оценки альтернатив от модели")
+        self.generate_alternatives_btn.setEnabled(False)
+        self.generate_alternatives_btn.clicked.connect(self.generate_alternatives_clicked.emit)
+        btn_layout.addWidget(self.generate_alternatives_btn)
 
         layout.addLayout(btn_layout)
         layout.addStretch()
@@ -184,8 +258,128 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         # Добавляем вкладку после "Основные параметры"
         self.tab_widget.insertTab(1, llm_tab, "Настройки LLM")
 
-    def get_original_text(self):
-        return self.orig_text.toPlainText()
+    def set_basic_prompt(self, text: str):
+        """Устанавливает базовый промпт (вызывается Presenter'ом)."""
+        self.basic_prompt_edit.blockSignals(True)
+        self.basic_prompt_edit.setPlainText(text)
+        self.basic_prompt_edit.blockSignals(False)
+
+    def get_basic_prompt(self) -> str:
+        return self.basic_prompt_edit.toPlainText()
+
+    def update_alternatives_descriptions(self, alternatives: list):
+        """Заполняет описания альтернатив внутри общего scroll."""
+        # Очищаем контейнер альтернатив
+        while self.alt_desc_layout.count():
+            item = self.alt_desc_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        self._alt_desc_edits = {}
+
+        for alt in alternatives:
+            row = QHBoxLayout()
+            label = QLabel(f"{alt.name}:")
+            label.setMinimumWidth(120)
+            row.addWidget(label)
+
+            edit = QPlainTextEdit()
+            edit.setPlaceholderText(f"Описание альтернативы '{alt.name}'")
+            edit.setMaximumHeight(60)
+            if hasattr(alt, 'description') and alt.description:
+                edit.setPlainText(alt.description)
+
+            func = self.create_function(alt.name, edit)
+            edit.textChanged.connect(
+                func
+            )
+            row.addWidget(edit)
+
+            self._alt_desc_edits[alt.name] = edit
+
+            container = QWidget()
+            container.setLayout(row)
+            self.alt_desc_layout.addWidget(container)
+
+    def create_function(self, name, edit):
+        def f():
+            self.alternative_description_changed.emit(name, edit.toPlainText())
+        return f
+
+    def get_alternatives_descriptions(self) -> dict:
+        """Возвращает словарь {имя_альтернативы: описание}."""
+        return {
+            name: edit.toPlainText()
+            for name, edit in self._alt_desc_edits.items()
+        }
+
+    def update_criteria_descriptions(self, tree: 'CriterionNode'):
+        """Заполняет дерево описаний критериев внутри общего scroll."""
+        self.criteria_desc_tree.clear()
+        self._crit_desc_items = {}
+
+        root_item = self.criteria_desc_tree.invisibleRootItem()
+        for child in tree.children:
+            self._add_criterion_desc_item(root_item, child)
+
+        # Разворачиваем все узлы
+        self.criteria_desc_tree.expandAll()
+
+        # Пересчитываем высоту дерева под содержимое,
+        # чтобы внешний scroll работал корректно
+        self._update_criteria_tree_height()
+
+    def _update_criteria_tree_height(self):
+        """Подстраивает высоту QTreeWidget под его содержимое."""
+        self.criteria_desc_tree.updateGeometry()
+        total_height = 0
+        root = self.criteria_desc_tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            total_height += self._item_height(root.child(i))
+        # Добавляем высоту заголовка
+        header_height = self.criteria_desc_tree.header().height()
+        self.criteria_desc_tree.setMinimumHeight(total_height + header_height + 5)
+
+    def _item_height(self, item: QTreeWidgetItem) -> int:
+        """Рекурсивно считает высоту элемента дерева с учётом потомков."""
+        item_height = self.criteria_desc_tree.visualItemRect(item).height()
+        if item_height == 0:
+            item_height = 24  # fallback
+        total = item_height
+        for i in range(item.childCount()):
+            total += self._item_height(item.child(i))
+        return total
+
+    def _add_criterion_desc_item(self, parent_item: QTreeWidgetItem, node: 'CriterionNode'):
+        """Рекурсивно добавляет узел критерия с полем описания."""
+        item = QTreeWidgetItem(parent_item)
+        item.setText(0, node.name)
+
+        # Поле ввода описания
+        desc_edit = QLineEdit()
+        desc_edit.setPlaceholderText("Описание критерия (необязательно)")
+        if hasattr(node, 'description') and node.description:
+            desc_edit.setText(node.description)
+
+        # Сигнал при изменении
+        desc_edit.textChanged.connect(
+            lambda text, name=node.name: self.criterion_description_changed.emit(name, text)
+        )
+
+        self.criteria_desc_tree.setItemWidget(item, 1, desc_edit)
+        self._crit_desc_items[node.name] = desc_edit
+
+        # Рекурсия для потомков
+        for child in node.children:
+            self._add_criterion_desc_item(item, child)
+
+    def get_criteria_descriptions(self) -> dict:
+        """Возвращает словарь {имя_критерия: описание}."""
+        return {
+            name: edit.text()
+            for name, edit in self._crit_desc_items.items()
+        }
 
     def update_llm_tab(self, data):
         self.alternative_description_inputs = {}
@@ -425,8 +619,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                     name = f"Альтернатива {i + 1}"
                 data['alternative_names'].append(name)
 
-        if data['criteria_tree'].children and data['num_alternatives'] > 0:
-            self.generate_btn.setEnabled(True)
+        # if data['criteria_tree'].children and data['num_alternatives'] > 0:
+        #     self.generate_btn.setEnabled(True)
         return data
 
     def _build_criteria_tree_from_ui(self) -> CriterionNode:
@@ -618,7 +812,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         return file_path
 
     def get_model_path(self) -> str:
-        self.generate_btn.setEnabled(False)
+        # self.generate_btn.setEnabled(False)
         return self.model_path_edit.currentText()
 
     def on_llm_finished(self, results):
@@ -631,10 +825,10 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.tab_widget.setCurrentIndex(2)  # "Данные экспертов"
         self.show_success("Оценки от LLM получены и заполнены!")
         # Возвращаем UI в исходное состояние
-        self.generate_btn.setEnabled(True)
+        # self.generate_btn.setEnabled(True)
 
     def on_llm_error(self, error_message):
-        self.generate_btn.setEnabled(True)
+        # self.generate_btn.setEnabled(True)
         self.show_error(f"Не удалось получить оценки:\n{error_message}")
 
     def fill_matrices_with_llm_results(self, results_tree: CriterionNode):

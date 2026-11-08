@@ -2,8 +2,9 @@ import numpy as np
 
 
 class CriterionNode:
-    def __init__(self, name):
+    def __init__(self, name, description=""):
         self.name = name
+        self.description = description
         self.children = []
         self.matrices = dict()
         self.weights = None
@@ -29,6 +30,7 @@ class CriterionNode:
 
         return {
             'name': self.name,
+            'description': self.description,
             'children': [child.to_dict() for child in self.children],
             'matrices': matrices_dict,
             'weights': self.weights.tolist() if self.weights is not None else None,
@@ -39,7 +41,7 @@ class CriterionNode:
     @classmethod
     def from_dict(cls, data: dict) -> 'CriterionNode':
         """Восстанавливает узел из словаря."""
-        node = cls(name=data['name'])
+        node = cls(name=data['name'], description=data.get('description', ''))
 
         # Восстанавливаем матрицы (списки обратно в numpy)
         for k_str, v in data.get('matrices', {}).items():

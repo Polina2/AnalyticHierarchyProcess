@@ -31,7 +31,6 @@ class AHPPresenter:
         self.view.criterion_description_changed.connect(self.on_crit_desc_changed)
         self.view.generate_criteria_clicked.connect(self.on_generate_criteria)
         self.view.generate_alternatives_clicked.connect(self.on_generate_alternatives)
-        # self.view.generate_clicked.connect(self.on_generate_clicked)
         self.view.alternatives_changed.connect(self.on_alternatives_changed)
         self.view.confirm_parameters_clicked.connect(self.on_confirm_parameters_clicked)
         self.view.calculate_results_clicked.connect(self.on_calculate_results_clicked)
@@ -68,12 +67,10 @@ class AHPPresenter:
         return None
 
     def on_generate_criteria(self):
-        # Обработчик будет позже
-        pass
+        self._start_generation(mode='criteria')
 
     def on_generate_alternatives(self):
-        # Обработчик будет позже
-        pass
+        self._start_generation(mode='alternatives')
 
     def _refresh_presets_ui(self, selected: str = None):
         presets = self.preset_manager.get_all_presets()
@@ -92,6 +89,9 @@ class AHPPresenter:
             # Перестраиваем UI
             self.view.rebuild_ui_from_state(self.state)
             self._refresh_presets_ui(selected=name)
+            self.view.update_alternatives_descriptions(self.state.alternatives)
+            self.view.update_criteria_descriptions(self.state.criteria_tree)
+            self.view.set_llm_buttons_enabled(True)
             self.view.show_success(f"Стиль '{name}' загружен")
         except Exception as e:
             self.view.show_error(f"Ошибка загрузки:\n{e}")
@@ -118,27 +118,57 @@ class AHPPresenter:
             # Перестраиваем UI на основе нового состояния
             self.view.rebuild_ui_from_state(self.state)
 
+            self.view.update_alternatives_descriptions(self.state.alternatives)
+            self.view.update_criteria_descriptions(self.state.criteria_tree)
+            self.view.set_llm_buttons_enabled(True)
+
             self.view.show_success("Прогресс успешно загружен!")
         except Exception as e:
             self.view.show_error(f"Ошибка при загрузке:\n{str(e)}")
 
-    def on_generate_clicked(self):
+    def _get_or_create_provider(self, mode: str) -> 'BaseLLMProvider':
         model_path = self.view.get_model_path()
-        if model_path[0] == '.' or model_path[1] == ':':
-            self.llm_provider = LocalLLMProvider(
+
+        if (self.llm_provider is not None
+                and self.llm_provider.model_path == model_path
+                and not self.llm_provider.isRunning()):
+            self.llm_provider.mode = mode
+            return self.llm_provider
+
+        if model_path.startswith('.') or model_path[1] == ':':
+            provider = LocalLLMProvider(
                 model_path=model_path,
                 prompt_generator=self.prompt_generator,
                 state=self.state
             )
         else:
-            self.llm_provider = APILLMProvider(
+            provider = APILLMProvider(
                 model_path=model_path,
                 prompt_generator=self.prompt_generator,
                 state=self.state
             )
-        self.llm_provider.finished.connect(self.view.on_llm_finished)
-        self.llm_provider.error.connect(self.view.on_llm_error)
-        self.llm_provider.start()
+
+        provider.mode = mode
+        provider.finished.connect(self.view.on_llm_finished)
+        provider.error.connect(self.view.on_llm_error)
+
+        self.llm_provider = provider
+        return provider
+
+    def _start_generation(self, mode: str):
+        if not self.state.criteria_tree.children:
+            self.view.show_error("Сначала задайте критерии")
+            return
+        if not self.state.alternatives and mode in ('all', 'alternatives'):
+            self.view.show_error("Сначала задайте альтернативы")
+            return
+
+        try:
+            provider = self._get_or_create_provider(mode)
+            provider.start()
+            self.view.set_llm_buttons_enabled(False)  # блокируем кнопки на время генерации
+        except Exception as e:
+            self.view.show_error(f"Ошибка запуска модели:\n{e}")
 
     def on_confirm_parameters_clicked(self):
         try:
@@ -147,9 +177,9 @@ class AHPPresenter:
             self.view.setup_expert_data_input(data)
             self.view.update_alternatives_descriptions(self.state.alternatives)
             self.view.update_criteria_descriptions(self.state.criteria_tree)
+            self.view.set_llm_buttons_enabled(True)
         except Exception as e:
             self.view.show_error(str(e))
-        # self.view.update_llm_tab(data)
 
     def on_calculate_results_clicked(self):
         # get expert data from ui

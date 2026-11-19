@@ -18,7 +18,6 @@ class Meta(abc.ABCMeta, PyQt6.sip.wrappertype):
 
 
 class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
-    # generate_clicked = pyqtSignal()
     generate_criteria_clicked = pyqtSignal()
     generate_alternatives_clicked = pyqtSignal()
     basic_prompt_changed = pyqtSignal(str)
@@ -31,7 +30,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
     export_clicked = pyqtSignal()
     save_state_clicked = pyqtSignal(str)  # file_path
     load_state_clicked = pyqtSignal(str)  # file_path
-    preset_load_requested = pyqtSignal(str)  # имя пресета
+    preset_load_requested = pyqtSignal(str)
 
     def show_error(self, message: str):
         QMessageBox.critical(self, "Ошибка", message)
@@ -49,7 +48,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self._connect_signals()
 
     def _connect_signals(self):
-        # self.generate_btn.clicked.connect(self.generate_clicked)
         self.alternatives_spin.valueChanged.connect(self.alternatives_changed)
         self.confirm_btn.clicked.connect(self.confirm_parameters_clicked)
         self.calculate_btn.clicked.connect(self.calculate_results_clicked)
@@ -381,15 +379,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             for name, edit in self._crit_desc_items.items()
         }
 
-    def update_llm_tab(self, data):
-        self.alternative_description_inputs = {}
-        for i in range(data['num_alternatives']):
-            self.prompt_layout.addWidget(QLabel(data['alternative_names'][i]+':'))
-            alt_text = QPlainTextEdit()
-            alt_text.setMaximumHeight(200)
-            self.prompt_layout.addWidget(alt_text)
-            self.alternative_description_inputs[data['alternative_names'][i]] = alt_text
-
     @staticmethod
     def build_matrix_from_inputs(input_matrix, size):
         matrix = np.ones((size, size))
@@ -618,9 +607,6 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 if not name:
                     name = f"Альтернатива {i + 1}"
                 data['alternative_names'].append(name)
-
-        # if data['criteria_tree'].children and data['num_alternatives'] > 0:
-        #     self.generate_btn.setEnabled(True)
         return data
 
     def _build_criteria_tree_from_ui(self) -> CriterionNode:
@@ -812,59 +798,72 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         return file_path
 
     def get_model_path(self) -> str:
-        # self.generate_btn.setEnabled(False)
         return self.model_path_edit.currentText()
+
+    def set_llm_buttons_enabled(self, enabled: bool):
+        self.generate_criteria_btn.setEnabled(enabled)
+        self.generate_alternatives_btn.setEnabled(enabled)
 
     def on_llm_finished(self, results):
         """Обработка завершения работы LLM"""
+        tree = results['tree']
+        mode = results['mode']
         # Заполняем матрицы в UI
         print("start filling ui with results")
-        self.fill_matrices_with_llm_results(results)
+        self.fill_matrices_with_llm_results(tree, mode)
         print("filled with results")
         # Переключаемся на вкладку экспертов
         self.tab_widget.setCurrentIndex(2)  # "Данные экспертов"
-        self.show_success("Оценки от LLM получены и заполнены!")
+        self.show_success(f"Оценки {mode} от LLM получены и заполнены")
         # Возвращаем UI в исходное состояние
-        # self.generate_btn.setEnabled(True)
+        self.set_llm_buttons_enabled(True)
 
     def on_llm_error(self, error_message):
-        # self.generate_btn.setEnabled(True)
+        self.set_llm_buttons_enabled(True)
         self.show_error(f"Не удалось получить оценки:\n{error_message}")
 
-    def fill_matrices_with_llm_results(self, results_tree: CriterionNode):
+    def fill_matrices_with_llm_results(self, results_tree: CriterionNode, mode: str = 'all'):
         """
-        Заполняет матрицы в UI результатами LLM для всех экспертов.
-
-        :param results_tree: дерево CriterionNode, где в каждом узле в matrices
-                             хранятся матрицы всех экспертов {expert_id: matrix}
+        Заполняет матрицы в UI результатами LLM.
+        mode: 'criteria' — только матрицы критериев,
+              'alternatives' — только матрицы альтернатив,
+              'all' — всё.
         """
         if not self.expert_data:
             return
 
         # Заполняем матрицы для каждого эксперта
         for expert_idx, expert_data in enumerate(self.expert_data):
-            self._fill_expert_matrices(expert_data, results_tree, expert_idx)
+            self._fill_expert_matrices(expert_data, results_tree, expert_idx, mode)
 
     def _fill_expert_matrices(self, ui_node: 'ExpertDataInputNode',
                               result_node: 'CriterionNode',
-                              expert_id: int):
+                              expert_id: int,
+                              mode: str):
         """
         Рекурсивно заполняет матрицы для одного эксперта.
 
         :param ui_node: узел дерева UI (ExpertDataInputNode)
         :param result_node: узел дерева результатов (CriterionNode)
         :param expert_id: ID эксперта
+        :param mode: 'all', 'criteria' или 'alternatives'
         """
         # Находим соответствующий узел в результатах по имени
         if ui_node.name == result_node.name:
+            should_fill = (mode == 'all'
+                           or mode == 'criteria' and not result_node.is_leaf()
+                           or mode == 'alternatives' and result_node.is_leaf())
             # Заполняем матрицу текущего узла
-            if ui_node.matrix_inputs is not None and expert_id in result_node.matrices:
+            if should_fill and ui_node.matrix_inputs is not None and expert_id in result_node.matrices:
                 matrix = result_node.matrices[expert_id]
-                self.fill_matrix_ui(ui_node.matrix_inputs, matrix)
+                try:
+                    self.fill_matrix_ui(ui_node.matrix_inputs, matrix)
+                except Exception as e:
+                    self.show_error(str(e))
 
             # Рекурсивно обрабатываем потомков
             for ui_child, result_child in zip(ui_node.children, result_node.children):
-                self._fill_expert_matrices(ui_child, result_child, expert_id)
+                self._fill_expert_matrices(ui_child, result_child, expert_id, mode)
 
     def fill_matrix_ui(self, ui_matrix, values_matrix):
         """Заполнение UI матрицы значениями"""

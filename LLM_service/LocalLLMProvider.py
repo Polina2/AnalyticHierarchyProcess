@@ -1,8 +1,6 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging
-from PyQt6.QtCore import pyqtSignal
 from LLM_service.BaseLLMProvider import BaseLLMProvider
-from domain.CriterionNode import CriterionNode
 
 
 def _replace_fractions(s):
@@ -22,14 +20,12 @@ def _replace_fractions(s):
 
 
 class LocalLLMProvider(BaseLLMProvider):
-    finished = pyqtSignal(CriterionNode)
-    error = pyqtSignal(str)
-
     def __init__(self, model_path, prompt_generator, state):
         super().__init__()
         self.model_path = model_path
         self.prompt_generator = prompt_generator
         self.state = state
+        self.mode = 'all'
         self.model = None
         self.tokenizer = None
         logging.set_verbosity_info()
@@ -63,7 +59,7 @@ class LocalLLMProvider(BaseLLMProvider):
 
             tree = self.state.criteria_tree
             self.generate_matrices(tree, 0)
-            self.finished.emit(tree)
+            self.finished.emit({'tree': tree, 'mode': self.mode})
 
         except Exception as e:
             self.error.emit(str(e))

@@ -50,10 +50,6 @@ class IAHPView(ABC):
         pass
 
     @abstractmethod
-    def update_llm_tab(self, data):
-        pass
-
-    @abstractmethod
     def get_alternative_descriptions(self):
         pass
 
@@ -82,3 +78,6 @@ class IAHPView(ABC):
 
     @abstractmethod
     def get_criteria_descriptions(self) -> dict: ...
+
+    @abstractmethod
+    def set_llm_buttons_enabled(self, enabled: bool): ...

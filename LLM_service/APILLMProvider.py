@@ -1,14 +1,10 @@
-from PyQt6.QtCore import pyqtSignal
 from huggingface_hub import InferenceClient
 from os import environ
 
 from LLM_service.BaseLLMProvider import BaseLLMProvider
-from domain.CriterionNode import CriterionNode
 
 
 class APILLMProvider(BaseLLMProvider):
-    finished = pyqtSignal(CriterionNode)
-    error = pyqtSignal(str)
 
     def __init__(self, model_path, prompt_generator, state):
         super().__init__()
@@ -16,6 +12,7 @@ class APILLMProvider(BaseLLMProvider):
         self.prompt_generator = prompt_generator
         self.client = None
         self.state = state
+        self.mode = 'all'
         self.paths = ['Qwen/Qwen3-235B-A22B-Instruct-2507', 'Qwen/Qwen2.5-32B-Instruct', 'Qwen/Qwen3-32B', 'Qwen/Qwen3.5-27B', 'Qwen/Qwen3-8B']
         self.providers = ['together', 'featherless-ai', 'ovhcloud', 'novita', 'fireworks-ai']
         self.i = 0
@@ -28,7 +25,7 @@ class APILLMProvider(BaseLLMProvider):
 
         tree = self.state.criteria_tree
         self.generate_matrices(tree, 0)
-        self.finished.emit(tree)
+        self.finished.emit({'tree': tree, 'mode': self.mode})
 
     def generate_matrices(self, node, expert_idx):
         super().generate_matrices(node, expert_idx)

@@ -22,18 +22,87 @@ class AHPState:
         self.genre_preset = ''
         self.method_type = 'crisp'
 
-    def save(self, file_path: str):
-        pass
-
-    @staticmethod
-    def load(cls, file_path: str):
-        pass
-
     def from_data(self, data):
         self.experts_count = data['num_experts']
-        self.criteria_tree = data['criteria_tree']
-        for i in range(data['num_alternatives']):
-            self.alternatives.append(Alternative(data['alternative_names'][i]))
+        self._sync_alternatives(
+            data['alternative_names'],
+            data['alternative_descriptions']
+        )
+        self.criteria_tree = self._sync_criteria_tree(
+            self.criteria_tree,
+            data['criteria_tree'],
+            data.get('criteria_descriptions', {})
+        )
+        # self.criteria_tree = data['criteria_tree']
+
+    def _sync_alternatives(self, new_names: list, new_descriptions: list):
+        # Собираем существующие описания в словарь
+        existing = {alt.name: alt.description for alt in self.alternatives}
+        # Формируем новый список
+        self.alternatives = []
+        for i, name in enumerate(new_names):
+            desc = new_descriptions[i] if i < len(new_descriptions) else ''
+            # Если описание пустое, но альтернатива уже была — берём старое
+            if not desc and name in existing:
+                desc = existing[name]
+            self.alternatives.append(Alternative(name=name, description=desc))
+
+    def _sync_criteria_tree(self, old_tree: 'CriterionNode',
+                            new_tree: 'CriterionNode',
+                            descriptions: dict) -> 'CriterionNode':
+        # Строим индекс старых детей по имени
+        old_children_by_name = {child.name: child for child in old_tree.children}
+
+        # Обновляем корень
+        root = new_tree
+        root.matrices = old_tree.matrices
+        root.weights = old_tree.weights
+        root.global_weights = old_tree.global_weights
+        root.consistency = old_tree.consistency
+        if root.name in descriptions:
+            root.description = descriptions[root.name]
+
+        # Для каждого нового ребёнка — ищем соответствующий старый
+        for new_child in root.children:
+            old_child = old_children_by_name.get(new_child.name)
+
+            if old_child is not None:
+                # Узел существовал — переносим заполненные данные
+                new_child.matrices = old_child.matrices
+                new_child.weights = old_child.weights
+                new_child.global_weights = old_child.global_weights
+                new_child.consistency = old_child.consistency
+                if not new_child.description and old_child.description:
+                    new_child.description = old_child.description
+
+                # Рекурсивная синхронизация потомков
+                self._sync_children(new_child, old_child, descriptions)
+            else:
+                # Новый узел — просто добавляем описание из словаря
+                if new_child.name in descriptions:
+                    new_child.description = descriptions[new_child.name]
+
+        return root
+
+    def _sync_children(self, new_node: 'CriterionNode',
+                       old_node: 'CriterionNode',
+                       descriptions: dict):
+        old_children_by_name = {child.name: child for child in old_node.children}
+
+        for new_child in new_node.children:
+            old_child = old_children_by_name.get(new_child.name)
+
+            if old_child is not None:
+                new_child.matrices = old_child.matrices
+                new_child.weights = old_child.weights
+                new_child.global_weights = old_child.global_weights
+                new_child.consistency = old_child.consistency
+                if not new_child.description and old_child.description:
+                    new_child.description = old_child.description
+                self._sync_children(new_child, old_child, descriptions)
+            else:
+                if new_child.name in descriptions:
+                    new_child.description = descriptions[new_child.name]
 
     def to_data(self) -> dict:
         data = {

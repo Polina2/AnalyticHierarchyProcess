@@ -12,12 +12,6 @@ class PresetInfo:
 
 
 class CriteriaPresetManager:
-    """
-    Менеджер встроенных пресетов (только для чтения).
-    Пользовательские пресеты не поддерживаются — для сохранения/загрузки
-    состояний используйте StateRepository.
-    """
-
     def __init__(self, builtin_dir: str = "presets_builtin"):
         self.builtin_dir = self._resolve_builtin_dir(builtin_dir)
 

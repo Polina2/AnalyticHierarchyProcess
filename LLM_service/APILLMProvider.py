@@ -1,3 +1,5 @@
+import random
+
 from huggingface_hub import InferenceClient
 from os import environ
 
@@ -37,7 +39,7 @@ class APILLMProvider(BaseLLMProvider):
         return super().generate_alternative_matrix(criterion)
 
     def call_model(self, prompt):
-        print(f'prompt {prompt}')
+        print(f'prompt\n{prompt}')
         messages = [
             {
                 "role": "system",
@@ -48,22 +50,23 @@ class APILLMProvider(BaseLLMProvider):
                 "content": prompt
             }
         ]
-        self.sleep(10)
+        self.sleep(random.randint(1, 10))
         try:
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=32,
+                max_tokens=64,
                 temperature=0.6
             )
             result = response.choices[0].message.content
+            print(result)
             return result
         except Exception as e:
             print(f"Ошибка генерации: {e}")
-            print(self.paths[self.i % len(self.paths)])
-            self.client = InferenceClient(
-                model=self.paths[self.i % len(self.paths)],
-                provider=self.providers[self.i % len(self.paths)],
-                token=environ['TOKEN']
-            )
-            self.i += 1
-            return self.call_model(prompt)
+            # print(self.paths[self.i % len(self.paths)])
+            # self.client = InferenceClient(
+            #     model=self.paths[self.i % len(self.paths)],
+            #     provider=self.providers[self.i % len(self.paths)],
+            #     token=environ['TOKEN']
+            # )
+            # self.i += 1
+            # return self.call_model(prompt)

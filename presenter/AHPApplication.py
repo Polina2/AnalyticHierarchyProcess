@@ -45,6 +45,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         super().__init__()
         self.init_ui()
         self.expert_data = []
+        self._crit_desc_items = None
+        self._alt_desc_edits = None
         self._connect_signals()
 
     def _connect_signals(self):
@@ -157,9 +159,10 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         self.model_path_edit = QComboBox()
         self.model_path_edit.addItem("./models/qwen2.5")
         self.model_path_edit.addItem("./models/qwen2.5-1.5b")
-        self.model_path_edit.addItem("Qwen/Qwen3.8-2.4T-A95B:novita")
-        self.model_path_edit.addItem("Qwen/Qwen3.6-35B-A3B")
-        self.model_path_edit.addItem("Qwen/Qwen3-Next-80B-A3B-Instruct:novita")
+        self.model_path_edit.addItem("Qwen/Qwen3.8-2.4T-A95B")
+        self.model_path_edit.addItem("deepseek-ai/DeepSeek-V4-Flash-0731")
+        self.model_path_edit.addItem("deepseek-ai/DeepSeek-V4-Pro")
+        self.model_path_edit.addItem("moonshotai/Kimi-K2-Instruct")
         model_layout.addWidget(self.model_path_edit)
 
         layout.addWidget(model_group)
@@ -310,7 +313,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         return {
             name: edit.toPlainText()
             for name, edit in self._alt_desc_edits.items()
-        }
+        } if self._alt_desc_edits else {}
 
     def update_criteria_descriptions(self, tree: 'CriterionNode'):
         """Заполняет дерево описаний критериев внутри общего scroll."""
@@ -377,7 +380,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
         return {
             name: edit.text()
             for name, edit in self._crit_desc_items.items()
-        }
+        } if self._crit_desc_items else {}
 
     @staticmethod
     def build_matrix_from_inputs(input_matrix, size):
@@ -398,6 +401,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                     except ValueError:
                         matrix[i, j] = 1.0
                         matrix[j, i] = 1.0
+                    except Exception as e:
+                        print(str(e))
 
         return matrix
 
@@ -594,9 +599,13 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
 
     def get_parameters(self):
         # Сохраняем основные параметры
-        data = {'num_alternatives': self.alternatives_spin.value(),
-                'num_experts': self.experts_spin.value(), 'alternative_names': [],
-                'criteria_tree': self._build_criteria_tree_from_ui()}
+        data = {
+            'num_alternatives': self.alternatives_spin.value(),
+            'num_experts': self.experts_spin.value(),
+            'alternative_names': [], 'alternative_descriptions': [],
+            'criteria_tree': self._build_criteria_tree_from_ui(),
+            'criteria_descriptions': self.get_criteria_descriptions()
+        }
 
         # Сохраняем названия альтернатив
         for i in range(self.alternatives_names_layout.count()):
@@ -607,6 +616,8 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 if not name:
                     name = f"Альтернатива {i + 1}"
                 data['alternative_names'].append(name)
+                alt_descs = self.get_alternatives_descriptions()
+                data['alternative_descriptions'].append(alt_descs.get(name, ''))
         return data
 
     def _build_criteria_tree_from_ui(self) -> CriterionNode:
@@ -647,6 +658,7 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
             self.children = []
 
     def setup_expert_data_input(self, data):
+        self.expert_data.clear()
         # Очищаем текущий контент
         for i in reversed(range(self.expert_scroll_layout.count())):
             widget = self.expert_scroll_layout.itemAt(i).widget()
@@ -709,6 +721,11 @@ class AHPApplication(QMainWindow, IAHPView, metaclass=Meta):
                 len(child_names)
             )
             expert_data.matrix_inputs = matrix_inputs
+
+            if expert_idx in node.matrices:
+                matrix = node.matrices[expert_idx]
+                self.fill_matrix_ui(matrix_inputs, matrix)
+
         parent_layout.addWidget(group)
         for child_node in node.children:
             expert_data.children.append(self.ExpertDataInputNode())
